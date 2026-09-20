@@ -1,9 +1,19 @@
 import sqlite3
+import sys
 
-from mcp.server.mcpserver import MCPServer
+# Importing the MCP SDK can take several seconds on a slow filesystem (e.g. WSL2 reading a
+# project on /mnt/d), so say something before it starts rather than looking hung.
+print("DailyAnchor: starting (loading dependencies, this can take a few seconds)...",
+      file=sys.stderr, flush=True)
 
-from dailyanchor.db import get_db, init_db
-from dailyanchor.tools import adaptation, reminders, routines, setup
+from mcp.server.mcpserver import MCPServer  # noqa: E402
+
+from dailyanchor.db import get_db, init_db  # noqa: E402
+from dailyanchor.tools import adaptation, reminders, routines, setup  # noqa: E402
+
+HOST = "127.0.0.1"
+PORT = 8000
+MCP_PATH = "/mcp"
 
 mcp = MCPServer("DailyAnchor")
 
@@ -93,7 +103,9 @@ def suggest_schedule_adjustments(lookback_days: int = 7) -> list[dict]:
 
 def main() -> None:
     # Streamable HTTP per MCP spec 2025-11-25 -- required transport for Alexa+ integration.
-    mcp.run(transport="streamable-http")
+    # The MCP endpoint is only at MCP_PATH; the root URL returns "Not Found", so print it.
+    print(f"DailyAnchor MCP endpoint: http://{HOST}:{PORT}{MCP_PATH}", file=sys.stderr, flush=True)
+    mcp.run(transport="streamable-http", host=HOST, port=PORT, streamable_http_path=MCP_PATH)
 
 
 if __name__ == "__main__":
