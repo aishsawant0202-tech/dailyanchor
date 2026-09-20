@@ -3,7 +3,7 @@ import sqlite3
 from mcp.server.mcpserver import MCPServer
 
 from dailyanchor.db import get_db, init_db
-from dailyanchor.tools import reminders, routines
+from dailyanchor.tools import adaptation, reminders, routines, setup
 
 mcp = MCPServer("DailyAnchor")
 
@@ -52,6 +52,43 @@ def snooze_step(step_id: str, minutes: int) -> dict:
 def get_daily_summary(log_date: str | None = None) -> dict:
     """Caregiver-facing summary of completed/missed/pending steps for a day."""
     return reminders.get_daily_summary(_connection(), log_date)
+
+
+@mcp.tool()
+def add_routine(name: str, description: str = "") -> dict:
+    """Create a new, empty routine (e.g. "Morning Routine"). Add steps with add_step."""
+    return setup.add_routine(_connection(), name, description)
+
+
+@mcp.tool()
+def add_step(
+    routine_id: str,
+    title: str,
+    expected_time: str,
+    window_minutes: int = 60,
+    description: str = "",
+    position: int | None = None,
+) -> dict:
+    """Add a step to a routine. expected_time is HH:MM (24h); window_minutes is how long
+    after that it still counts as on time. Appended to the end unless position is given."""
+    return setup.add_step(
+        _connection(), routine_id, title, expected_time, window_minutes, description, position
+    )
+
+
+@mcp.tool()
+def update_step_time(step_id: str, expected_time: str) -> dict:
+    """Permanently change when a step is expected (HH:MM). Use to accept a schedule
+    suggestion; snooze_step only shifts a step for today."""
+    return setup.update_step_time(_connection(), step_id, expected_time)
+
+
+@mcp.tool()
+def suggest_schedule_adjustments(lookback_days: int = 7) -> list[dict]:
+    """Suggest moving steps the person consistently completes later than scheduled,
+    based on recent history. Ask the person or caregiver before applying one with
+    update_step_time."""
+    return adaptation.suggest_schedule_adjustments(_connection(), lookback_days)
 
 
 def main() -> None:
