@@ -67,6 +67,7 @@ tests/
   test_tools.py       # routine/reminder logic (in-memory SQLite)
   test_setup.py       # add_routine / add_step / update_step_time
   test_adaptation.py  # schedule adjustment suggestions
+  test_seed.py        # seed script: idempotent, demo history, reset
 ```
 
 Business logic in `tools/` takes a plain `sqlite3.Connection` and has no MCP
@@ -83,8 +84,15 @@ python -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e .
 
-# seed sample routines into data/dailyanchor.db
+# seed sample routines into data/dailyanchor.db (safe to re-run)
 python scripts/seed_data.py
+
+# demo setup: also add a week of past completions, so the adaptive
+# suggestion ("breakfast is usually ~09:15, move it?") has history to learn from
+python scripts/seed_data.py --history
+
+# start a clean demo take: wipe all data, then reseed
+python scripts/seed_data.py --reset --history
 
 # run the MCP server (Streamable HTTP, per MCP spec 2025-11-25)
 python -m dailyanchor.server
@@ -102,7 +110,7 @@ pytest
 - [ ] Confirm actual Alexa+ ↔ MCP server invocation flow via hackathon office hours (docs are minimal as of this writing) and adjust transport/auth if needed.
 - [x] Add a caregiver-side "add routine" / "add step" tool so routines can be configured conversationally rather than only via `scripts/seed_data.py`.
 - [x] Adaptive behavior: suggest schedule changes from completion history.
-- [ ] Seed some demo history so `suggest_schedule_adjustments` has something to show in the video.
+- [x] Seed some demo history so `suggest_schedule_adjustments` has something to show in the video.
 - [ ] Record demo video (<3 min) walking through the scenario above.
 - [ ] Write up product feedback (MCP SDK / Alexa+ docs / Devpost) as required by the submission.
 
