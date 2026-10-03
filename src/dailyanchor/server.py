@@ -1,5 +1,6 @@
 import sqlite3
 import sys
+from typing import Any
 
 # Importing the MCP SDK can take several seconds on a slow filesystem (e.g. WSL2 reading a
 # project on /mnt/d), so say something before it starts rather than looking hung.
@@ -35,13 +36,13 @@ def list_routines() -> list[dict]:
 
 
 @mcp.tool()
-def get_current_step(routine_id: str) -> dict | None:
+def get_current_step(routine_id: str) -> dict[str, Any] | None:
     """Get the next step the person should do right now in a given routine."""
     return routines.get_current_step(_connection(), routine_id)
 
 
 @mcp.tool()
-def mark_step_done(routine_id: str, step_id: str) -> dict:
+def mark_step_done(routine_id: str, step_id: str) -> dict[str, Any]:
     """Mark a routine step as completed for today."""
     return routines.mark_step_done(_connection(), routine_id, step_id)
 
@@ -53,19 +54,19 @@ def get_missed_steps(routine_id: str | None = None) -> list[dict]:
 
 
 @mcp.tool()
-def snooze_step(step_id: str, minutes: int) -> dict:
+def snooze_step(step_id: str, minutes: int) -> dict[str, Any]:
     """Push a step's expected time later today, for a gentler re-prompt after a miss."""
     return reminders.snooze_step(_connection(), step_id, minutes)
 
 
 @mcp.tool()
-def get_daily_summary(log_date: str | None = None) -> dict:
+def get_daily_summary(log_date: str | None = None) -> dict[str, Any]:
     """Caregiver-facing summary of completed/missed/pending steps for a day."""
     return reminders.get_daily_summary(_connection(), log_date)
 
 
 @mcp.tool()
-def add_routine(name: str, description: str = "") -> dict:
+def add_routine(name: str, description: str = "") -> dict[str, Any]:
     """Create a new, empty routine (e.g. "Morning Routine"). Add steps with add_step."""
     return setup.add_routine(_connection(), name, description)
 
@@ -78,7 +79,7 @@ def add_step(
     window_minutes: int = 60,
     description: str = "",
     position: int | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Add a step to a routine. expected_time is HH:MM (24h); window_minutes is how long
     after that it still counts as on time. Appended to the end unless position is given."""
     return setup.add_step(
@@ -87,7 +88,7 @@ def add_step(
 
 
 @mcp.tool()
-def update_step_time(step_id: str, expected_time: str) -> dict:
+def update_step_time(step_id: str, expected_time: str) -> dict[str, Any]:
     """Permanently change when a step is expected (HH:MM). Use to accept a schedule
     suggestion; snooze_step only shifts a step for today."""
     return setup.update_step_time(_connection(), step_id, expected_time)
