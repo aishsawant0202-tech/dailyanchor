@@ -62,6 +62,39 @@ Add an entry as soon as something gets in the way; details are hard to recall la
 - **Suggestion:** Have `init-context` say clearly whether registration succeeded, and print
   the exact command to register the server manually if it did not.
 
+## 4. A bare `-> dict` return annotation silently drops structured output
+
+- **Date:** 2026-10-03
+- **Task attempted:** Writing an MCP client (`scripts/demo_client.py`) that drives the live
+  server and prints each tool's structured JSON result, to use as the hackathon simulation
+  script and video spine.
+- **Steps taken:**
+  1. Called `mark_step_done`, `add_step`, `snooze_step`, `get_daily_summary`, `add_routine`,
+     and `update_step_time` via `mcp.Client.call_tool(...)` against the running server.
+  2. Read `result.structured_content` on the returned `CallToolResult`.
+- **Expected:** The dict the Python function returned (same as `list_routines` -> `list[dict]`
+  and `get_current_step` -> `dict | None`, which both came back correctly in
+  `structured_content`).
+- **Actual:** `structured_content` was `None` for every tool annotated as a bare `-> dict`
+  (no type arguments). The data wasn't lost -- it was still JSON-encoded inside the
+  unstructured `content[0].text` block -- but a client reading only `structured_content`
+  (as MCP's structured-output feature is meant to allow) gets nothing. `dict | None` and
+  `list[dict]` on the *same* server, with the *same* mcp package (2.2.0, well above this
+  project's `mcp[cli]>=1.2.0` floor), both produced correct `structured_content`; only the
+  bare, unparameterized `dict` silently fell back to unstructured-only.
+- **Severity:** moderate -- cost real debugging time (an `ExceptionGroup`/`TypeError`
+  traceback two levels removed from the actual cause), and would have made Alexa+ itself
+  get an opaque JSON-text blob back from 6 of this server's 10 tools instead of structured
+  data, defeating the point of typed tool outputs.
+- **Workaround:** Changed every bare `-> dict` tool signature in `server.py` to
+  `-> dict[str, Any]`, which produces correct `structured_content`. Also made the demo
+  client fall back to parsing `content[0].text` as JSON when `structured_content` is `None`,
+  so it degrades gracefully if this recurs for a tool we haven't hit yet.
+- **Suggestion:** Either make `MCPServer.tool()` build an output schema for a bare `dict`
+  return annotation the same way it does for `dict[str, Any]`, or have it warn/log loudly
+  when a tool's return type is "object-shaped but un-typed enough to skip structured output"
+  rather than silently falling back to text-only content.
+
 ---
 
 ## To confirm (not yet hit; turn into entries if they become real problems)
@@ -70,8 +103,6 @@ Add an entry as soon as something gets in the way; details are hard to recall la
   Are local/tunnelled URLs accepted?
 - Which reminder and routine features does Alexa+ already provide natively, so the server
   can add value on top instead of duplicating them?
-- Is the MCP spec version (2025-11-25) stable in the SDK version used here, or did the
-  transport/API change between releases?
 
 ## Entry template
 

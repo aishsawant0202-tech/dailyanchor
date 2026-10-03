@@ -45,8 +45,30 @@ next 5 minutes. Alexa+ should ask before applying one with `update_step_time`.
 
 1. Morning: person asks Alexa+ what's next → `get_current_step` returns "Take morning medication."
 2. They confirm → `mark_step_done`.
-3. Time passes, breakfast step is missed → `get_missed_steps` flags it; Alexa+ gently re-prompts and, if needed, calls `snooze_step` to push it back 30 minutes instead of just marking it failed.
-4. A remote caregiver asks Alexa+ "how did today go?" → `get_daily_summary` reports completed/missed/pending across all routines.
+3. A step is missed → `get_missed_steps` flags it; Alexa+ gently re-prompts and calls
+   `snooze_step` to push it back 30 minutes instead of just marking it failed.
+4. A remote caregiver asks Alexa+ "how did today go?" → `get_daily_summary` reports
+   completed/missed/pending across all routines.
+5. Alexa+ asks if anything should change → `suggest_schedule_adjustments` notices breakfast
+   is consistently ~40 minutes late and offers to move it; on confirmation, `update_step_time`
+   applies it.
+
+`scripts/demo_client.py` runs this whole scenario against a live DailyAnchor server as a
+**scripted simulation**: the "Alexa+ says" / "Person says" lines are fixed dialogue (there is
+no real Alexa+ connection here), but every fact in them — step names, times, which step is
+missed, the suggested new time — comes back from real MCP tool calls, printed alongside the
+dialogue so the two stay distinguishable. This is the Alexa+-track simulation the hackathon
+rules ask the repo to include; the demo video should make clear it's simulated.
+
+```bash
+# terminal 1
+python scripts/seed_data.py --reset --history
+python -m dailyanchor.server
+
+# terminal 2
+python scripts/demo_client.py            # paced for recording (1.5s between lines)
+python scripts/demo_client.py --no-pause # fast run, e.g. to sanity-check before recording
+```
 
 ## Project structure
 
@@ -63,6 +85,7 @@ src/dailyanchor/
     adaptation.py # suggest_schedule_adjustments
 scripts/
   seed_data.py    # seeds sample Morning/Evening routines for demoing
+  demo_client.py  # scripted Alexa+-session simulation over real MCP calls (see below)
 tests/
   test_tools.py       # routine/reminder logic (in-memory SQLite)
   test_setup.py       # add_routine / add_step / update_step_time
@@ -111,6 +134,7 @@ pytest
 - [x] Add a caregiver-side "add routine" / "add step" tool so routines can be configured conversationally rather than only via `scripts/seed_data.py`.
 - [x] Adaptive behavior: suggest schedule changes from completion history.
 - [x] Seed some demo history so `suggest_schedule_adjustments` has something to show in the video.
+- [x] Scripted simulation client (`scripts/demo_client.py`) exercising the full demo scenario over real MCP calls.
 - [ ] Record demo video (<3 min) walking through the scenario above.
 - [ ] Write up product feedback (MCP SDK / Alexa+ docs / Devpost) as required by the submission.
 
