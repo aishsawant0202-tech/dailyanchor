@@ -33,6 +33,17 @@ server over Streamable HTTP so an Alexa+ agent can:
 | `update_step_time` | Permanently change when a step is expected (`snooze_step` only shifts it for today). |
 | `suggest_schedule_adjustments` | Looks at recent history and suggests moving steps the person consistently does late, e.g. "breakfast is usually done around 09:15 rather than 08:30 — move it?" |
 
+## Caregiver dashboard
+
+The server also serves a read-only web page at **http://127.0.0.1:8000/dashboard**
+(`/` redirects there). It shows each routine's steps for today as *Done* (with the time),
+*Due now*, *Upcoming* or *Missed*, marks snoozed steps, and lists the current schedule
+suggestions. It refreshes every 5 seconds, so a step marked done through an MCP tool shows up
+on the page a moment later.
+
+`http://127.0.0.1:8000/mcp` is for MCP clients only; opening it in a browser gives a
+"Missing session ID" error, which is expected.
+
 ### How the adaptive suggestion works
 
 `suggest_schedule_adjustments` compares each step's completion times over the last
@@ -77,6 +88,7 @@ src/dailyanchor/
   server.py       # MCP server entrypoint (FastMCP, Streamable HTTP transport)
   db.py           # SQLite schema + connection helper
   time_utils.py   # shared time/deadline/override logic
+  dashboard.py    # caregiver web page served at /dashboard
   models.py       # dataclasses for Routine, Step, Completion
   tools/
     routines.py   # list_routines, get_current_step, mark_step_done, get_missed_steps
@@ -91,6 +103,7 @@ tests/
   test_setup.py       # add_routine / add_step / update_step_time
   test_adaptation.py  # schedule adjustment suggestions
   test_seed.py        # seed script: idempotent, demo history, reset
+  test_dashboard.py   # dashboard step statuses and HTML rendering
 ```
 
 Business logic in `tools/` takes a plain `sqlite3.Connection` and has no MCP
@@ -120,6 +133,9 @@ python scripts/seed_data.py --reset --history
 # run the MCP server (Streamable HTTP, per MCP spec 2025-11-25)
 python -m dailyanchor.server
 ```
+
+Then open http://127.0.0.1:8000/dashboard in a browser, and point MCP clients (e.g. the
+MCP Inspector, transport "Streamable HTTP") at http://127.0.0.1:8000/mcp.
 
 Run tests:
 

@@ -8,7 +8,10 @@ print("DailyAnchor: starting (loading dependencies, this can take a few seconds)
       file=sys.stderr, flush=True)
 
 from mcp.server.mcpserver import MCPServer  # noqa: E402
+from starlette.requests import Request  # noqa: E402
+from starlette.responses import HTMLResponse, RedirectResponse, Response  # noqa: E402
 
+from dailyanchor import dashboard  # noqa: E402
 from dailyanchor.db import get_db, init_db  # noqa: E402
 from dailyanchor.tools import adaptation, reminders, routines, setup  # noqa: E402
 
@@ -102,10 +105,34 @@ def suggest_schedule_adjustments(lookback_days: int = 7) -> list[dict]:
     return adaptation.suggest_schedule_adjustments(_connection(), lookback_days)
 
 
+@mcp.custom_route("/", methods=["GET"])
+async def root(request: Request) -> Response:
+    # Opening the server URL in a browser used to show a bare "Not Found".
+    return RedirectResponse("/dashboard")
+
+
+@mcp.custom_route("/dashboard", methods=["GET"])
+async def dashboard_page(request: Request) -> Response:
+    """Read-only caregiver view of today's routines, for a browser rather than an agent."""
+    # Its own short-lived connection: sync tools run in worker threads, and a sqlite3
+    # connection can only be used from the thread that created it.
+    conn = get_db()
+    try:
+        init_db(conn)
+        data = dashboard.build_dashboard(conn)
+    finally:
+        conn.close()
+    tool_count = len(await mcp.list_tools())
+    return HTMLResponse(
+        dashboard.render_dashboard(data, f"http://{HOST}:{PORT}{MCP_PATH}", tool_count)
+    )
+
+
 def main() -> None:
     # Streamable HTTP per MCP spec 2025-11-25 -- required transport for Alexa+ integration.
     # The MCP endpoint is only at MCP_PATH; the root URL returns "Not Found", so print it.
     print(f"DailyAnchor MCP endpoint: http://{HOST}:{PORT}{MCP_PATH}", file=sys.stderr, flush=True)
+    print(f"Caregiver dashboard:      http://{HOST}:{PORT}/dashboard", file=sys.stderr, flush=True)
     mcp.run(transport="streamable-http", host=HOST, port=PORT, streamable_http_path=MCP_PATH)
 
 
