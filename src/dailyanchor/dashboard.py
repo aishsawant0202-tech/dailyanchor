@@ -9,8 +9,9 @@ import sqlite3
 from datetime import datetime
 from html import escape
 
-from dailyanchor.time_utils import deadline_for, effective_expected_time, today
+from dailyanchor.time_utils import today
 from dailyanchor.tools.adaptation import suggest_schedule_adjustments
+from dailyanchor.tools.routines import step_status
 
 REFRESH_SECONDS = 5
 
@@ -23,38 +24,6 @@ STATUS_LABELS = {
 }
 
 
-def _step_status(conn: sqlite3.Connection, step: dict, log_date: str, now: datetime) -> dict:
-    completion = conn.execute(
-        "SELECT completed_at FROM completions WHERE step_id = ? AND log_date = ? "
-        "ORDER BY completed_at LIMIT 1",
-        (step["id"], log_date),
-    ).fetchone()
-    expected_time = effective_expected_time(conn, step, log_date)
-    deadline = deadline_for(log_date, expected_time, step["window_minutes"])
-    start = deadline_for(log_date, expected_time, 0)
-
-    if completion:
-        status = "done"
-    elif now > deadline:
-        status = "missed"
-    elif now >= start:
-        status = "due"
-    else:
-        status = "upcoming"
-
-    return {
-        "id": step["id"],
-        "title": step["title"],
-        "description": step["description"],
-        "expected_time": expected_time,
-        "scheduled_time": step["expected_time"],
-        "snoozed": expected_time != step["expected_time"],
-        "window_minutes": step["window_minutes"],
-        "status": status,
-        "completed_at": completion["completed_at"][11:16] if completion else None,
-    }
-
-
 def build_dashboard(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
     """Today's status for every step of every active routine, plus schedule suggestions."""
     now = now or datetime.now()
@@ -64,7 +33,7 @@ def build_dashboard(conn: sqlite3.Connection, now: datetime | None = None) -> di
     for routine_row in conn.execute("SELECT * FROM routines WHERE active = 1").fetchall():
         routine = dict(routine_row)
         steps = [
-            _step_status(conn, dict(row), log_date, now)
+            step_status(conn, dict(row), log_date, now)
             for row in conn.execute(
                 "SELECT * FROM steps WHERE routine_id = ? ORDER BY order_index",
                 (routine["id"],),
@@ -98,7 +67,7 @@ def _step_row(step: dict) -> str:
     status = step["status"]
     label = STATUS_LABELS[status]
     if status == "done" and step["completed_at"]:
-        label = f"Done at {escape(step['completed_at'])}"
+        label = f"Done at {escape(step['completed_at'][11:16])}"
     return (
         f'<li class="step {status}">'
         f'<div class="time">{when}</div>'

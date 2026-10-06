@@ -25,6 +25,7 @@ server over Streamable HTTP so an Alexa+ agent can:
 | `list_routines` | List all active routines with their ordered steps. |
 | `get_current_step` | The next not-yet-completed step in a routine — "what should I do now?" |
 | `mark_step_done` | Record a step as completed for today. |
+| `check_step_done` | "Did I already take my pill?" — whether a step was done today and at what time, matched from the person's own words. Returns every match if ambiguous (e.g. morning and evening meds). Guards against double-dosing. |
 | `get_missed_steps` | Steps that are overdue (past expected time + window) and not completed. |
 | `snooze_step` | Push a step's expected time later today — a gentler re-prompt after a miss. |
 | `get_daily_summary` | Caregiver-facing rollup of completed / missed / pending steps for a day. |
@@ -32,6 +33,16 @@ server over Streamable HTTP so an Alexa+ agent can:
 | `add_step` | Add a step (title, `HH:MM` time, on-time window) to a routine, at the end or at a given position. |
 | `update_step_time` | Permanently change when a step is expected (`snooze_step` only shifts it for today). |
 | `suggest_schedule_adjustments` | Looks at recent history and suggests moving steps the person consistently does late, e.g. "breakfast is usually done around 09:15 rather than 08:30 — move it?" |
+
+## Agent Skill
+
+`skills/dailyanchor-care-assistant/SKILL.md` is an [Agent Skill](https://agentskills.io) that
+teaches any agent using these tools how to act as the assistant, not just which tools exist:
+always check `check_step_done` before talking about medication and ask when the match is
+ambiguous, re-prompt gently with `snooze_step` instead of scolding, and ask before applying
+a schedule suggestion. The MCP server provides the memory; the skill provides the care workflow.
+
+To use it with Claude Code, copy or link the folder into a project's `.claude/skills/`.
 
 ## Caregiver dashboard
 
@@ -91,10 +102,12 @@ src/dailyanchor/
   dashboard.py    # caregiver web page served at /dashboard
   models.py       # dataclasses for Routine, Step, Completion
   tools/
-    routines.py   # list_routines, get_current_step, mark_step_done, get_missed_steps
+    routines.py   # list_routines, get_current_step, mark_step_done, check_step_done, get_missed_steps
     reminders.py  # snooze_step, get_daily_summary
     setup.py      # add_routine, add_step, update_step_time
     adaptation.py # suggest_schedule_adjustments
+skills/
+  dailyanchor-care-assistant/SKILL.md  # Agent Skill: how an agent should use these tools
 scripts/
   seed_data.py    # seeds sample Morning/Evening routines for demoing
   demo_client.py  # scripted Alexa+-session simulation over real MCP calls (see below)

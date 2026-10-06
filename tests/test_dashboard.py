@@ -54,7 +54,7 @@ def test_step_statuses_cover_done_missed_due_upcoming(conn):
 
     steps = data["routines"][0]["steps"]
     assert [s["status"] for s in steps] == ["done", "missed", "due", "upcoming"]
-    assert steps[0]["completed_at"] == "08:10"
+    assert steps[0]["completed_at"] == "2026-09-20T08:10:00"
     assert data["routines"][0]["counts"] == {"done": 1, "missed": 1, "due": 1, "upcoming": 1}
 
 

@@ -95,12 +95,81 @@ Add an entry as soon as something gets in the way; details are hard to recall la
   when a tool's return type is "object-shaped but un-typed enough to skip structured output"
   rather than silently falling back to text-only content.
 
+## 5. Requests through a tunnel are rejected with `421 Invalid Host header`
+
+- **Date:** 2026-10-05
+- **Task attempted:** Prepare the server to be reached through a tunnel (cloudflared/ngrok),
+  the usual way to give a cloud agent like Alexa+ a public HTTPS URL for a local server.
+- **Steps taken:**
+  1. Ran the server as before (`host="127.0.0.1"`, Streamable HTTP).
+  2. Sent an MCP `initialize` POST to `/mcp` with the `Host` header a quick tunnel would
+     forward (`Host: abc.trycloudflare.com`). Reproduced locally with curl; a real tunnel was
+     not set up.
+- **Expected:** The request handled like a local one, since the tunnel delivers it to
+  127.0.0.1 exactly as a local client would.
+- **Actual:** `HTTP/1.1 421 Misdirected Request`, body `Invalid Host header`. The same request
+  with `Host: 127.0.0.1:8000` returns 200. Cause: when the host is 127.0.0.1/localhost, the
+  SDK (mcp 2.3.0) switches on DNS-rebinding protection by default, allowing only localhost
+  `Host` values. Nothing in the startup output says this protection is on, and the only server
+  log line is a `WARNING Invalid Host header` without the rejected value or the setting to
+  change -- so behind a tunnel, every request from the cloud agent would fail.
+- **Severity:** moderate -- found before it cost a live test, but it would fail exactly at the
+  first real Alexa+ connection attempt, with an error that doesn't point at the fix.
+- **Workaround:** Not applied yet (no public client to test with). The fix is to pass
+  `transport_security` with the tunnel hostname added to `allowed_hosts`.
+- **Suggestion:** Log the rejected `Host` value and the setting that controls it (e.g.
+  "Host 'abc.trycloudflare.com' not in allowed_hosts; see transport_security"), and document
+  the tunnel case on the Streamable HTTP page, since tunnelling a local server is a common
+  way to test cloud agents.
+
+## 6. `mcp.run()` has no hook for HTTP middleware
+
+- **Date:** 2026-10-05
+- **Task attempted:** Log every MCP request (JSON-RPC method, tool name, client, status) to
+  see whether a remote client was really calling the server.
+- **Steps taken:**
+  1. Looked for a way to add Starlette/ASGI middleware through `MCPServer.run(...)`.
+  2. Found `MCPServer(middleware=...)`, but it wraps JSON-RPC messages inside the SDK, after
+     the transport, so it can't see the HTTP status, `Host` header or client IP -- and so
+     can't log requests the transport rejects, such as the 421s in entry 5.
+- **Expected:** A way to add HTTP-level middleware while still using `run()`.
+- **Actual:** `run(transport="streamable-http")` builds the Starlette app and starts uvicorn
+  internally, with no parameter for HTTP middleware.
+- **Severity:** minor
+- **Workaround:** Call `mcp.streamable_http_app(...)` directly, wrap it in our own ASGI
+  middleware (`src/dailyanchor/request_log.py`), and start it with `uvicorn.run(...)`.
+- **Suggestion:** Accept an `http_middleware` (list of Starlette `Middleware`) argument on
+  `run()` / `streamable_http_app()`, or document the "build the app and wrap it" pattern.
+
+## 7. No documented way to connect a self-hosted MCP server to real Alexa+
+
+- **Date:** 2026-10-06
+- **Task attempted:** Validate the server with the real Alexa+ as the MCP client.
+- **Steps taken:**
+  1. Read the Alexa+ track description, the linked MCP spec pages and the ADBT get-started
+     page, looking for how Alexa+ is pointed at a self-hosted Streamable HTTP server.
+  2. Planned a public HTTPS endpoint (tunnel, then AWS) on the assumption that Alexa+ would
+     need one, which surfaced entry 5.
+- **Expected:** A short "connect your MCP server to Alexa+" guide: where to register the URL,
+  what auth is supported, and whether a developer/preview account is needed.
+- **Actual:** No such path found for hackathon entrants. The official rules later clarified
+  that a simulated Alexa+ experience (any agentic tool, via a web app) is acceptable, but
+  only after time had gone into planning hosting for a client we couldn't access.
+- **Severity:** moderate -- cost planning time and left the core integration unverifiable
+  against the real target.
+- **Workaround:** Validated the server with another MCP client instead (Claude Code, which
+  picked the expected tool for all 8 test utterances, confirmed in the server's request log),
+  and plan a web-app simulation per the rules.
+- **Suggestion:** State on the track page, up front, that real Alexa+ access isn't available
+  to entrants and that simulation is the expected path -- or, if it is available, link the
+  steps to register a server URL and the supported auth.
+
 ---
 
 ## To confirm (not yet hit; turn into entries if they become real problems)
 
-- How does real Alexa+ reach a self-hosted server: public HTTPS URL, auth, account linking?
-  Are local/tunnelled URLs accepted?
+- If real Alexa+ access becomes available: how does it reach a self-hosted server (public
+  HTTPS URL, auth, account linking), and are tunnelled URLs accepted? (See entry 7.)
 - Which reminder and routine features does Alexa+ already provide natively, so the server
   can add value on top instead of duplicating them?
 

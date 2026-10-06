@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 import sys
 from typing import Any
@@ -13,6 +14,7 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response  # noqa
 
 from dailyanchor import dashboard  # noqa: E402
 from dailyanchor.db import get_db, init_db  # noqa: E402
+from dailyanchor.request_log import RequestLogMiddleware  # noqa: E402
 from dailyanchor.tools import adaptation, reminders, routines, setup  # noqa: E402
 
 HOST = "127.0.0.1"
@@ -48,6 +50,15 @@ def get_current_step(routine_id: str) -> dict[str, Any] | None:
 def mark_step_done(routine_id: str, step_id: str) -> dict[str, Any]:
     """Mark a routine step as completed for today."""
     return routines.mark_step_done(_connection(), routine_id, step_id)
+
+
+@mcp.tool()
+def check_step_done(step: str) -> dict[str, Any]:
+    """Check whether a step was already done today, and when -- use this whenever the
+    person asks "did I take my pill?", "have I eaten?" or similar, especially before
+    medication, so nothing is taken twice. `step` can be their own words ("morning pill")
+    or a step id. If several steps match (status "ambiguous"), ask which one they mean."""
+    return routines.check_step_done(_connection(), step)
 
 
 @mcp.tool()
@@ -133,7 +144,19 @@ def main() -> None:
     # The MCP endpoint is only at MCP_PATH; the root URL returns "Not Found", so print it.
     print(f"DailyAnchor MCP endpoint: http://{HOST}:{PORT}{MCP_PATH}", file=sys.stderr, flush=True)
     print(f"Caregiver dashboard:      http://{HOST}:{PORT}/dashboard", file=sys.stderr, flush=True)
-    mcp.run(transport="streamable-http", host=HOST, port=PORT, streamable_http_path=MCP_PATH)
+    # Built by hand rather than mcp.run() so every MCP request gets a log line (method, tool,
+    # client) -- the quickest way to see whether Alexa+ is actually calling the server.
+    import uvicorn
+
+    # Own plain handler: the SDK's rich log handler wraps these lines across several rows.
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s MCP %(message)s", datefmt="%H:%M:%S"))
+    request_logger = logging.getLogger("dailyanchor.requests")
+    request_logger.addHandler(handler)
+    request_logger.setLevel(logging.INFO)
+    request_logger.propagate = False
+    app = mcp.streamable_http_app(streamable_http_path=MCP_PATH, host=HOST)
+    uvicorn.run(RequestLogMiddleware(app, MCP_PATH), host=HOST, port=PORT)
 
 
 if __name__ == "__main__":
