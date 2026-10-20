@@ -27,10 +27,10 @@ def conn():
 
 
 def test_seed_routines_creates_sample_routines(conn, seed_data):
-    assert seed_data.seed_routines(conn) == 2
+    assert seed_data.seed_routines(conn) == 3
 
     listed = {r["name"]: r for r in routines.list_routines(conn)}
-    assert set(listed) == {"Morning Routine", "Evening Routine"}
+    assert set(listed) == {"Morning Routine", "Midday Routine", "Evening Routine"}
     assert [s["title"] for s in listed["Morning Routine"]["steps"]] == [
         "Take morning medication",
         "Eat breakfast",
@@ -42,7 +42,7 @@ def test_seed_routines_twice_does_not_duplicate(conn, seed_data):
     seed_data.seed_routines(conn)
 
     assert seed_data.seed_routines(conn) == 0
-    assert len(routines.list_routines(conn)) == 2
+    assert len(routines.list_routines(conn)) == 3
 
 
 def test_seed_history_is_repeatable(conn, seed_data):
@@ -51,7 +51,7 @@ def test_seed_history_is_repeatable(conn, seed_data):
     first = seed_data.seed_history(conn, now=NOW)
     second = seed_data.seed_history(conn, now=NOW)
 
-    assert first == 5 * 7  # 5 steps, 7 past days
+    assert first == 10 * 7  # 10 steps, 7 past days
     assert second == 0
 
 

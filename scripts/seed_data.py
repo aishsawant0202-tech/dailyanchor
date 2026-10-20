@@ -12,45 +12,83 @@ from datetime import datetime, timedelta
 from dailyanchor.db import get_db, init_db
 from dailyanchor.tools import routines, setup
 
+# Sample routines for the demo persona: Margaret, 78, living alone with early-stage memory
+# loss. Her daughter Priya checks in remotely as caregiver (see scripts/demo_client.py).
 ROUTINES = [
     {
         "name": "Morning Routine",
-        "description": "Medication, breakfast, and daily check-in.",
+        "description": "Morning medication, breakfast, and a look at the day ahead.",
         "steps": [
             {
                 "title": "Take morning medication",
-                "description": "One tablet with water.",
+                "description": "One white tablet from the Monday-Sunday pill box, with a full glass of water.",
                 "expected_time": "08:00",
                 "window_minutes": 60,
             },
             {
                 "title": "Eat breakfast",
-                "description": "",
+                "description": "Porridge or toast; the kettle is already filled the night before.",
                 "expected_time": "08:30",
                 "window_minutes": 60,
             },
             {
                 "title": "Review today's appointments",
-                "description": "Alexa+ reads out the day's schedule.",
+                "description": "Alexa+ reads out the day's schedule from the kitchen calendar.",
                 "expected_time": "09:00",
                 "window_minutes": 90,
             },
         ],
     },
     {
+        "name": "Midday Routine",
+        "description": "Lunch, afternoon medication, staying hydrated and a little movement.",
+        "steps": [
+            {
+                "title": "Eat lunch",
+                "description": "Priya leaves a labelled lunch in the fridge each morning.",
+                "expected_time": "12:30",
+                "window_minutes": 60,
+            },
+            {
+                "title": "Take afternoon medication",
+                "description": "One yellow capsule from the pill box, taken with food.",
+                "expected_time": "13:00",
+                "window_minutes": 60,
+            },
+            {
+                "title": "Drink a glass of water",
+                "description": "Easy to forget in the afternoon; refill the bottle by the armchair.",
+                "expected_time": "14:30",
+                "window_minutes": 60,
+            },
+            {
+                "title": "Short walk around the garden",
+                "description": "Ten minutes outside if it's dry; wear the shoes by the back door.",
+                "expected_time": "15:30",
+                "window_minutes": 90,
+            },
+        ],
+    },
+    {
         "name": "Evening Routine",
-        "description": "Evening medication and wind-down.",
+        "description": "Evening medication and a safe wind-down for the night.",
         "steps": [
             {
                 "title": "Take evening medication",
-                "description": "One tablet with water.",
+                "description": "One white tablet from the evening row of the pill box, with water.",
                 "expected_time": "19:00",
                 "window_minutes": 60,
             },
             {
                 "title": "Lock the front door",
-                "description": "",
+                "description": "Turn the key twice and put it on the hook by the door.",
                 "expected_time": "21:00",
+                "window_minutes": 60,
+            },
+            {
+                "title": "Put phone on charge",
+                "description": "On the bedside table, so Priya can reach her in the morning.",
+                "expected_time": "21:30",
                 "window_minutes": 60,
             },
         ],
@@ -60,13 +98,19 @@ ROUTINES = [
 # Minutes after the scheduled time that each step was completed, one entry per past day
 # (most recent first). Fixed values, not random, so every demo take behaves the same.
 # Breakfast is consistently ~40 minutes late, so suggest_schedule_adjustments proposes
-# moving it to 09:15. Everything else is close to on time, so nothing else is suggested.
+# moving it to 09:15. Everything else has a median under 15 minutes late (the suggestion
+# threshold), so nothing else is suggested.
 DEMO_HISTORY_MINUTES_LATE = {
     "Take morning medication": [3, 5, 2, 6, 4, 3, 5],
     "Eat breakfast": [37, 42, 46, 40, 44, 38, 45],
     "Review today's appointments": [4, 8, 6, 5, 7, 9, 5],
+    "Eat lunch": [8, 12, 5, 10, 7, 9, 6],
+    "Take afternoon medication": [4, 2, 6, 3, 5, 4, 3],
+    "Drink a glass of water": [10, 20, 5, 14, 12, 8, 25],
+    "Short walk around the garden": [15, 5, 30, 10, 0, 20, 12],
     "Take evening medication": [5, 3, 8, 4, 6, 2, 7],
     "Lock the front door": [10, 12, 8, 15, 9, 11, 10],
+    "Put phone on charge": [5, 0, 10, 3, 8, 2, 6],
 }
 
 

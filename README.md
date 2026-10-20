@@ -65,15 +65,21 @@ next 5 minutes. Alexa+ should ask before applying one with `update_step_time`.
 
 ## Demo scenario (for the video)
 
-1. Morning: person asks Alexa+ what's next → `get_current_step` returns "Take morning medication."
-2. They confirm → `mark_step_done`.
+The demo follows **Margaret**, 78, who lives alone with early-stage memory loss, and her
+daughter **Priya**, who checks in by phone as her caregiver. The seed data gives Margaret a
+Morning, Midday and Evening routine (meds, meals, water, a short walk, locking up).
+
+1. Morning: Margaret asks Alexa+ what's next → `get_current_step` returns "Take morning medication."
+2. She confirms → `mark_step_done`.
 3. A step is missed → `get_missed_steps` flags it; Alexa+ gently re-prompts and calls
    `snooze_step` to push it back 30 minutes instead of just marking it failed.
-4. A remote caregiver asks Alexa+ "how did today go?" → `get_daily_summary` reports
+4. Priya asks Alexa+ "how is Mum's day going?" → `get_daily_summary` reports
    completed/missed/pending across all routines.
-5. Alexa+ asks if anything should change → `suggest_schedule_adjustments` notices breakfast
+5. Priya asks if anything should change → `suggest_schedule_adjustments` notices breakfast
    is consistently ~40 minutes late and offers to move it; on confirmation, `update_step_time`
    applies it.
+6. Priya adds the exercises Margaret's physiotherapist prescribed, by voice → `add_routine`
+   creates "Physio Exercises" and `add_step` adds leg stretches (10:30) and balance practice (16:00).
 
 `scripts/demo_client.py` runs this whole scenario against a live DailyAnchor server as a
 **scripted simulation**: the "Alexa+ says" / "Person says" lines are fixed dialogue (there is
@@ -109,7 +115,7 @@ src/dailyanchor/
 skills/
   dailyanchor-care-assistant/SKILL.md  # Agent Skill: how an agent should use these tools
 scripts/
-  seed_data.py    # seeds sample Morning/Evening routines for demoing
+  seed_data.py    # seeds sample Morning/Midday/Evening routines for demoing
   demo_client.py  # scripted Alexa+-session simulation over real MCP calls (see below)
 tests/
   test_tools.py       # routine/reminder logic (in-memory SQLite)

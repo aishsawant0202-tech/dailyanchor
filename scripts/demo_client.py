@@ -5,6 +5,9 @@ call and narrates results in its own voice, and this repo has no way to drive th
 real Alexa+ app. The lines marked "Alexa+:" and "Person:" below are fixed dialogue,
 written to read the way a real session would sound.
 
+The persona: Margaret, 78, lives alone with early-stage memory loss. Her daughter Priya
+lives an hour away and checks in by phone as her caregiver.
+
 What is NOT faked: every fact inside those lines -- step names, times, which steps
 are missed, the adaptive suggestion -- comes back from a real MCP tool call against
 a running DailyAnchor server. Each beat prints the exact tool call it made and the
@@ -38,6 +41,18 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import create_mcp_http_client
 
 DEFAULT_URL = "http://127.0.0.1:8000/mcp"
+
+PERSON = "Margaret"
+CAREGIVER = "Priya"
+
+# Beat 5: the routine Priya sets up by voice.
+PHYSIO_ROUTINE = "Physio Exercises"
+PHYSIO_STEPS = [
+    {"title": "Leg stretches", "expected_time": "10:30", "window_minutes": 60,
+     "description": "Three slow stretches per leg, holding the kitchen counter."},
+    {"title": "Balance practice", "expected_time": "16:00", "window_minutes": 60,
+     "description": "Stand on one foot for ten seconds each side, next to a chair."},
+]
 
 PAUSE_SECONDS = 1.5  # overridden by --pause / --no-pause; set per-run in main()
 
@@ -122,12 +137,14 @@ async def run_demo(url: str, api_key: str | None = None) -> None:
         print(f"\nUsing routine: {morning['name']} ({len(morning['steps'])} steps)")
 
         # --- Beat 1: morning check-in -----------------------------------------
-        banner("Beat 1 - Morning check-in")
-        says("Person", "Alexa, what's next on my morning routine?")
+        banner(f"Beat 1 - Morning check-in with {PERSON}")
+        says(PERSON, "Alexa, what's next on my morning routine?")
         step = await call(client, "get_current_step", routine_id=morning["id"])
         if step:
-            says("Alexa+", f"Time to {step['title'].lower()}. It's set for {step['expected_time']}.")
-            says("Person", "Done, thanks.")
+            says("Alexa+", f"Good morning, {PERSON}. Time to {step['title'].lower()} -- it's set for {step['expected_time']}.")
+            if step.get("description"):
+                says("Alexa+", step["description"])
+            says(PERSON, "Done, thanks.")
             await call(client, "mark_step_done", routine_id=morning["id"], step_id=step["id"])
             says("Alexa+", "Nice work -- I've checked that off.")
         else:
@@ -153,15 +170,15 @@ async def run_demo(url: str, api_key: str | None = None) -> None:
         missed_step = next((m for m in (missed or []) if m["id"] == demo_step["step_id"]), None)
         if missed_step:
             says("Alexa+", f"Looks like '{missed_step['title']}' got missed earlier -- want me to push it back half an hour instead?")
-            says("Person", "Yes, please.")
+            says(PERSON, "Oh, I forgot. Yes, please.")
             await call(client, "snooze_step", step_id=missed_step["id"], minutes=30)
             says("Alexa+", "Done -- I'll check back with you then, no harm done.")
         else:
             says("Alexa+", "(unexpected: the demo step wasn't flagged as missed)")
 
         # --- Beat 3: caregiver summary ------------------------------------------
-        banner("Beat 3 - A caregiver checks in remotely")
-        says("Person", "(caregiver, by phone) Alexa, how did Mom's day go?")
+        banner(f"Beat 3 - {CAREGIVER}, {PERSON}'s daughter, checks in by phone")
+        says(CAREGIVER, "Alexa, how is Mum's day going?")
         summary = await call(client, "get_daily_summary")
         for r in summary["routines"]:
             says(
@@ -172,12 +189,12 @@ async def run_demo(url: str, api_key: str | None = None) -> None:
 
         # --- Beat 4: adaptive suggestion ----------------------------------------
         banner("Beat 4 - Adapting to how mornings actually go")
-        says("Person", "Alexa, any changes I should make to the routine?")
+        says(CAREGIVER, "Is there anything in her routine we should change?")
         suggestions = await call(client, "suggest_schedule_adjustments")
         if suggestions:
             top = suggestions[0]
             says("Alexa+", top["message"])
-            says("Person", "Sure, go ahead.")
+            says(CAREGIVER, "That makes sense. Go ahead.")
             await call(client, "update_step_time", step_id=top["step_id"], expected_time=top["suggested_time"])
             says("Alexa+", f"Done -- '{top['title']}' is now scheduled for {top['suggested_time']}.")
         else:
@@ -186,6 +203,27 @@ async def run_demo(url: str, api_key: str | None = None) -> None:
                 "Nothing to adjust yet -- I need a few more days of history before I "
                 "suggest a change. (Run `seed_data.py --history` for demo data.)",
             )
+
+        # --- Beat 5: caregiver sets up a new routine by voice -------------------
+        banner(f"Beat 5 - {CAREGIVER} adds a new routine by voice")
+        says(CAREGIVER, f"Alexa, {PERSON}'s physio gave her two exercises to do every day. Can you add them?")
+        says("Alexa+", "Of course. What should I call the routine, and when should she do them?")
+        says(CAREGIVER, "Call it Physio Exercises. Leg stretches at half ten, balance practice at four.")
+        if find_routine(all_routines, PHYSIO_ROUTINE):
+            says("Alexa+", f"{PERSON} already has a '{PHYSIO_ROUTINE}' routine, so I've left it as it is.")
+            print("   (Reseed with `seed_data.py --reset --history` for a clean take.)")
+        else:
+            created = await call(
+                client, "add_routine", name=PHYSIO_ROUTINE,
+                description="Daily exercises from the physiotherapist.",
+            )
+            added = [
+                await call(client, "add_step", routine_id=created["routine_id"], **step_data)
+                for step_data in PHYSIO_STEPS
+            ]
+            schedule = " and ".join(f"{a['title'].lower()} at {a['expected_time']}" for a in added)
+            says("Alexa+", f"All set. I'll remind {PERSON} about {schedule}, and let you know if one gets missed.")
+            says(CAREGIVER, "Perfect, thank you.")
 
     print()
     print("=" * 70)
