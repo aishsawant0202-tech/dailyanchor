@@ -28,11 +28,14 @@ regardless of what time of day this is run -- see the comment at that beat.
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from datetime import datetime, timedelta
 
 from mcp import Client
+from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 
 DEFAULT_URL = "http://127.0.0.1:8000/mcp"
 
@@ -95,14 +98,19 @@ def find_step(routine: dict, title: str) -> dict | None:
     return next((s for s in routine["steps"] if s["title"] == title), None)
 
 
-async def run_demo(url: str) -> None:
+async def run_demo(url: str, api_key: str | None = None) -> None:
     print("=" * 70)
     print("DailyAnchor -- simulated Alexa+ session (see module docstring: this is")
     print("scripted dialogue over real MCP tool calls, not a live Alexa+ connection)")
     print("=" * 70)
     pause()
 
-    async with Client(url) as client:
+    # A deployed server with DAILYANCHOR_API_KEY set needs the key as a bearer token.
+    server = url
+    if api_key:
+        http_client = create_mcp_http_client(headers={"Authorization": f"Bearer {api_key}"})
+        server = streamable_http_client(url, http_client=http_client)
+    async with Client(server) as client:
         banner("Setup: what routines does DailyAnchor know about?")
         all_routines = await call(client, "list_routines")
         if not all_routines:
@@ -190,13 +198,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--url", default=DEFAULT_URL, help=f"MCP server URL (default: {DEFAULT_URL})")
     parser.add_argument("--pause", type=float, default=1.5, help="seconds to pause between lines (default: 1.5)")
+    parser.add_argument("--api-key", default=os.environ.get("DAILYANCHOR_API_KEY"),
+                        help="API key for a server with DAILYANCHOR_API_KEY set (default: that env var)")
     parser.add_argument("--no-pause", action="store_true", help="run without pauses, e.g. for a quick smoke test")
     args = parser.parse_args()
 
     PAUSE_SECONDS = 0.0 if args.no_pause else args.pause
 
     try:
-        asyncio.run(run_demo(args.url))
+        asyncio.run(run_demo(args.url, args.api_key))
     except ConnectionError as exc:
         print(f"\nCouldn't reach the DailyAnchor server at {args.url}: {exc}")
         print("Start it first with: python -m dailyanchor.server")

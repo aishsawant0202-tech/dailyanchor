@@ -15,6 +15,7 @@ from starlette.requests import Request  # noqa: E402
 from starlette.responses import HTMLResponse, RedirectResponse, Response  # noqa: E402
 
 from dailyanchor import dashboard  # noqa: E402
+from dailyanchor.auth import ApiKeyMiddleware  # noqa: E402
 from dailyanchor.db import get_db, init_db  # noqa: E402
 from dailyanchor.request_log import RequestLogMiddleware  # noqa: E402
 from dailyanchor.tools import adaptation, reminders, routines, setup  # noqa: E402
@@ -24,6 +25,8 @@ from dailyanchor.tools import adaptation, reminders, routines, setup  # noqa: E4
 HOST = os.environ.get("DAILYANCHOR_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8000"))
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DAILYANCHOR_ALLOWED_HOSTS", "").split(",") if h.strip()]
+# When set, MCP clients must send "Authorization: Bearer <key>". Set it on any public host.
+API_KEY = os.environ.get("DAILYANCHOR_API_KEY", "")
 MCP_PATH = "/mcp"
 LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 LOCAL_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
@@ -173,6 +176,11 @@ def main() -> None:
     elif HOST not in ("127.0.0.1", "localhost", "::1"):
         print("Warning: DAILYANCHOR_ALLOWED_HOSTS is not set, so Host/Origin checks are off.",
               file=sys.stderr, flush=True)
+    if API_KEY:
+        print("API key:                  required on the MCP endpoint", file=sys.stderr, flush=True)
+    elif HOST not in ("127.0.0.1", "localhost", "::1"):
+        print("Warning: DAILYANCHOR_API_KEY is not set, so anyone can call the MCP tools.",
+              file=sys.stderr, flush=True)
     # Built by hand rather than mcp.run() so every MCP request gets a log line (method, tool,
     # client) -- the quickest way to see whether Alexa+ is actually calling the server.
     import uvicorn
@@ -189,6 +197,9 @@ def main() -> None:
         host=HOST,
         transport_security=build_transport_security(ALLOWED_HOSTS),
     )
+    if API_KEY:
+        app = ApiKeyMiddleware(app, MCP_PATH, API_KEY)
+    # Logging wraps auth, so rejected requests (401) are logged too.
     uvicorn.run(RequestLogMiddleware(app, MCP_PATH), host=HOST, port=PORT)
 
 

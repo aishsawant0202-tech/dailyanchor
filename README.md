@@ -167,18 +167,30 @@ Defaults suit running locally. Environment variables change them for a cloud hos
 | `PORT` | `8000` | Port to listen on. |
 | `DAILYANCHOR_ALLOWED_HOSTS` | *(none)* | Comma-separated public hostnames (e.g. `dailyanchor.example.com`) the MCP endpoint accepts in the `Host` header, in addition to localhost. Without it, requests through a tunnel or proxy to a server bound to 127.0.0.1 get `421 Invalid Host header`, and a server bound to `0.0.0.0` does no Host/Origin checks. |
 | `DAILYANCHOR_DB` | `data/dailyanchor.db` | SQLite file location, e.g. on a mounted volume. |
+| `DAILYANCHOR_API_KEY` | *(none)* | When set, MCP clients must send `Authorization: Bearer <key>`; others get 401. The dashboard stays open. Set it on any public deployment. |
 
 The `Dockerfile` listens on `0.0.0.0:8000`, seeds the sample routines and demo history on
 start (idempotent), then runs the server:
 
 ```bash
 docker build -t dailyanchor .
-docker run -p 8000:8000 -e DAILYANCHOR_ALLOWED_HOSTS=dailyanchor.example.com dailyanchor
+docker run -p 8000:8000 -e DAILYANCHOR_ALLOWED_HOSTS=dailyanchor.example.com \
+    -e DAILYANCHOR_API_KEY=<long-random-key> dailyanchor
+
+# run the demo against it
+python scripts/demo_client.py --url https://dailyanchor.example.com/mcp --api-key <long-random-key>
 ```
 
 The database lives inside the container, so it resets on each redeploy unless
-`/app/data` is mounted as a volume. The MCP tools have no authentication yet, so anyone
-with the URL can call them.
+`/app/data` is mounted as a volume.
+
+### AWS EC2
+
+`deploy/ec2-user-data.sh` deploys to a single free-tier EC2 instance (Amazon Linux 2023)
+with no SSH needed: set `API_KEY` in it and paste it into *User data* when launching, with
+ports 80 and 443 open. On first boot it builds the image from this repo and runs it behind
+Caddy, which serves HTTPS at `https://<public-ip-with-dashes>.sslip.io`. The hostname comes
+from the public IP, which changes if the instance is stopped and started.
 
 ## Status / next steps
 
