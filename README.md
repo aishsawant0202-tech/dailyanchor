@@ -157,6 +157,29 @@ pip install pytest
 pytest
 ```
 
+## Configuration & container
+
+Defaults suit running locally. Environment variables change them for a cloud host:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DAILYANCHOR_HOST` | `127.0.0.1` | Interface to listen on; `0.0.0.0` in a container. |
+| `PORT` | `8000` | Port to listen on. |
+| `DAILYANCHOR_ALLOWED_HOSTS` | *(none)* | Comma-separated public hostnames (e.g. `dailyanchor.example.com`) the MCP endpoint accepts in the `Host` header, in addition to localhost. Without it, requests through a tunnel or proxy to a server bound to 127.0.0.1 get `421 Invalid Host header`, and a server bound to `0.0.0.0` does no Host/Origin checks. |
+| `DAILYANCHOR_DB` | `data/dailyanchor.db` | SQLite file location, e.g. on a mounted volume. |
+
+The `Dockerfile` listens on `0.0.0.0:8000`, seeds the sample routines and demo history on
+start (idempotent), then runs the server:
+
+```bash
+docker build -t dailyanchor .
+docker run -p 8000:8000 -e DAILYANCHOR_ALLOWED_HOSTS=dailyanchor.example.com dailyanchor
+```
+
+The database lives inside the container, so it resets on each redeploy unless
+`/app/data` is mounted as a volume. The MCP tools have no authentication yet, so anyone
+with the URL can call them.
+
 ## Status / next steps
 
 - [ ] Confirm actual Alexa+ ↔ MCP server invocation flow via hackathon office hours (docs are minimal as of this writing) and adjust transport/auth if needed.

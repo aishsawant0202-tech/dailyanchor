@@ -1,4 +1,5 @@
 import logging
+import os
 import sqlite3
 import sys
 from typing import Any
@@ -9,6 +10,7 @@ print("DailyAnchor: starting (loading dependencies, this can take a few seconds)
       file=sys.stderr, flush=True)
 
 from mcp.server.mcpserver import MCPServer  # noqa: E402
+from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 from starlette.responses import HTMLResponse, RedirectResponse, Response  # noqa: E402
 
@@ -17,9 +19,31 @@ from dailyanchor.db import get_db, init_db  # noqa: E402
 from dailyanchor.request_log import RequestLogMiddleware  # noqa: E402
 from dailyanchor.tools import adaptation, reminders, routines, setup  # noqa: E402
 
-HOST = "127.0.0.1"
-PORT = 8000
+# Defaults are for running locally. In a container or on a cloud host, set
+# DAILYANCHOR_HOST=0.0.0.0 and DAILYANCHOR_ALLOWED_HOSTS to the public hostname(s).
+HOST = os.environ.get("DAILYANCHOR_HOST", "127.0.0.1")
+PORT = int(os.environ.get("PORT", "8000"))
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DAILYANCHOR_ALLOWED_HOSTS", "").split(",") if h.strip()]
 MCP_PATH = "/mcp"
+LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+LOCAL_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
+
+
+def build_transport_security(allowed_hosts: list[str]) -> TransportSecuritySettings | None:
+    """Host/Origin checks for the MCP endpoint. With no public hostnames, return None and
+    keep the SDK default: localhost-only when bound to 127.0.0.1, which rejects tunnelled
+    or proxied requests with 421 "Invalid Host header". Otherwise allow those hostnames
+    (any port, http or https) as well as localhost."""
+    if not allowed_hosts:
+        return None
+    hosts = list(LOCAL_HOSTS)
+    origins = list(LOCAL_ORIGINS)
+    for host in allowed_hosts:
+        hosts += [host, f"{host}:*"]
+        origins += [f"https://{host}", f"http://{host}", f"https://{host}:*", f"http://{host}:*"]
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True, allowed_hosts=hosts, allowed_origins=origins
+    )
 
 mcp = MCPServer("DailyAnchor")
 
@@ -134,9 +158,9 @@ async def dashboard_page(request: Request) -> Response:
     finally:
         conn.close()
     tool_count = len(await mcp.list_tools())
-    return HTMLResponse(
-        dashboard.render_dashboard(data, f"http://{HOST}:{PORT}{MCP_PATH}", tool_count)
-    )
+    # From the request rather than HOST/PORT, so a deployed server shows its public URL.
+    mcp_url = str(request.base_url).rstrip("/") + MCP_PATH
+    return HTMLResponse(dashboard.render_dashboard(data, mcp_url, tool_count))
 
 
 def main() -> None:
@@ -144,6 +168,11 @@ def main() -> None:
     # The MCP endpoint is only at MCP_PATH; the root URL returns "Not Found", so print it.
     print(f"DailyAnchor MCP endpoint: http://{HOST}:{PORT}{MCP_PATH}", file=sys.stderr, flush=True)
     print(f"Caregiver dashboard:      http://{HOST}:{PORT}/dashboard", file=sys.stderr, flush=True)
+    if ALLOWED_HOSTS:
+        print(f"Allowed public hosts:     {', '.join(ALLOWED_HOSTS)}", file=sys.stderr, flush=True)
+    elif HOST not in ("127.0.0.1", "localhost", "::1"):
+        print("Warning: DAILYANCHOR_ALLOWED_HOSTS is not set, so Host/Origin checks are off.",
+              file=sys.stderr, flush=True)
     # Built by hand rather than mcp.run() so every MCP request gets a log line (method, tool,
     # client) -- the quickest way to see whether Alexa+ is actually calling the server.
     import uvicorn
@@ -155,7 +184,11 @@ def main() -> None:
     request_logger.addHandler(handler)
     request_logger.setLevel(logging.INFO)
     request_logger.propagate = False
-    app = mcp.streamable_http_app(streamable_http_path=MCP_PATH, host=HOST)
+    app = mcp.streamable_http_app(
+        streamable_http_path=MCP_PATH,
+        host=HOST,
+        transport_security=build_transport_security(ALLOWED_HOSTS),
+    )
     uvicorn.run(RequestLogMiddleware(app, MCP_PATH), host=HOST, port=PORT)
 
 

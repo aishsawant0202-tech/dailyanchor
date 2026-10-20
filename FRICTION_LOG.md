@@ -115,8 +115,9 @@ Add an entry as soon as something gets in the way; details are hard to recall la
   change -- so behind a tunnel, every request from the cloud agent would fail.
 - **Severity:** moderate -- found before it cost a live test, but it would fail exactly at the
   first real Alexa+ connection attempt, with an error that doesn't point at the fix.
-- **Workaround:** Not applied yet (no public client to test with). The fix is to pass
-  `transport_security` with the tunnel hostname added to `allowed_hosts`.
+- **Workaround:** Pass `transport_security` with the public hostname added to
+  `allowed_hosts`, now set via the `DAILYANCHOR_ALLOWED_HOSTS` environment variable
+  (verified locally with curl: the listed host gets 200, others still get 421).
 - **Suggestion:** Log the rejected `Host` value and the setting that controls it (e.g.
   "Host 'abc.trycloudflare.com' not in allowed_hosts; see transport_security"), and document
   the tunnel case on the Streamable HTTP page, since tunnelling a local server is a common

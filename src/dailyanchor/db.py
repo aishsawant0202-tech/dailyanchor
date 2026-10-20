@@ -1,7 +1,12 @@
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "dailyanchor.db"
+# DAILYANCHOR_DB overrides the location, e.g. a mounted volume in a container.
+DB_PATH = Path(
+    os.environ.get("DAILYANCHOR_DB")
+    or Path(__file__).resolve().parent.parent.parent / "data" / "dailyanchor.db"
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS routines (
