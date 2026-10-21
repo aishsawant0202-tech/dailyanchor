@@ -503,7 +503,7 @@ const BEATS = [
       const past = new Date(serverNow().getTime() - 20 * 60000);
       const added = await callTool("add_step", {
         routine_id: morning.id, title: "Take out recycling", expected_time: hhmm(past), window_minutes: 5,
-        description: "(demo-only step, added a few minutes in the past so it's overdue now)",
+        description: "Put the green recycling box out by the front gate.",
       });
       const missed = await callTool("get_missed_steps", { routine_id: morning.id });
       const step = (missed || []).find(m => m.id === added.step_id);

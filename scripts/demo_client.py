@@ -183,7 +183,7 @@ async def run_demo(url: str, api_key: str | None = None) -> None:
             title="Take out recycling",
             expected_time=past_time,
             window_minutes=5,
-            description="(demo-only step, added a few minutes in the past so it's overdue now)",
+            description="Put the green recycling box out by the front gate.",
         )
         missed = await call(client, "get_missed_steps", routine_id=morning["id"])
         missed_step = next((m for m in (missed or []) if m["id"] == demo_step["step_id"]), None)
