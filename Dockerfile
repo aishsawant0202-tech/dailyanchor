@@ -2,6 +2,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Timezone data, so TZ (e.g. -e TZ=Europe/Berlin) sets the clock the routines run on;
+# otherwise "now" is UTC and steps show as due or missed hours off from the person's day.
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
 # Listen on all interfaces inside the container; set DAILYANCHOR_ALLOWED_HOSTS at deploy
 # time to the public hostname so the MCP endpoint accepts requests addressed to it.
 # FORWARDED_ALLOW_IPS lets uvicorn trust the platform proxy's X-Forwarded-Proto, so the

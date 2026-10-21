@@ -7,6 +7,8 @@ set -euxo pipefail
 
 # Change this before launching. MCP clients send it as "Authorization: Bearer <key>".
 API_KEY="CHANGE_ME"
+# The person's timezone: routine times like 08:00 are in this zone.
+TIMEZONE="Europe/Berlin"
 REPO="https://github.com/aishsawant0202-tech/dailyanchor.git"
 
 dnf install -y docker git
@@ -25,6 +27,7 @@ docker run -d --name dailyanchor --network dailyanchor --restart unless-stopped 
   -v dailyanchor-data:/app/data \
   -e DAILYANCHOR_ALLOWED_HOSTS="$HOSTNAME" \
   -e DAILYANCHOR_API_KEY="$API_KEY" \
+  -e TZ="$TIMEZONE" \
   dailyanchor
 
 docker run -d --name caddy --network dailyanchor --restart unless-stopped \

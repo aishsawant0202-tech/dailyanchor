@@ -191,6 +191,7 @@ Defaults suit running locally. Environment variables change them for a cloud hos
 | `DAILYANCHOR_ALLOWED_HOSTS` | *(none)* | Comma-separated public hostnames (e.g. `dailyanchor.example.com`) the MCP endpoint accepts in the `Host` header, in addition to localhost. Without it, requests through a tunnel or proxy to a server bound to 127.0.0.1 get `421 Invalid Host header`, and a server bound to `0.0.0.0` does no Host/Origin checks. |
 | `DAILYANCHOR_DB` | `data/dailyanchor.db` | SQLite file location, e.g. on a mounted volume. |
 | `DAILYANCHOR_API_KEY` | *(none)* | When set, MCP clients must send `Authorization: Bearer <key>`; others get 401. The dashboard stays open. Set it on any public deployment. |
+| `TZ` | system (UTC in the container) | Timezone the routine times are in, e.g. `Europe/Berlin`. `deploy/ec2-user-data.sh` sets it from `TIMEZONE`. |
 
 The `Dockerfile` listens on `0.0.0.0:8000`, seeds the sample routines and demo history on
 start (idempotent), then runs the server:
