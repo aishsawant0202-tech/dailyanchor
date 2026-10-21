@@ -113,6 +113,30 @@ def find_step(routine: dict, title: str) -> dict | None:
     return next((s for s in routine["steps"] if s["title"] == title), None)
 
 
+def connect(url: str, api_key: str | None):
+    # A deployed server with DAILYANCHOR_API_KEY set needs the key as a bearer token.
+    if not api_key:
+        return Client(url)
+    http_client = create_mcp_http_client(headers={"Authorization": f"Bearer {api_key}"})
+    return Client(streamable_http_client(url, http_client=http_client))
+
+
+async def run_check(url: str, api_key: str | None = None) -> None:
+    """Read-only smoke test: connects and calls only tools that change nothing, so a
+    deployed server's data stays clean for the recorded take."""
+    async with connect(url, api_key) as client:
+        tools = await client.list_tools()
+        print(f"Connected to {url}: {len(tools.tools)} tools")
+        all_routines = await call(client, "list_routines")
+        for routine in all_routines or []:
+            times = ", ".join(f"{s['expected_time']} {s['title']}" for s in routine["steps"])
+            print(f"   {routine['name']}: {times}")
+        await call(client, "get_daily_summary")
+        await call(client, "check_step_done", step="morning medication")
+        await call(client, "suggest_schedule_adjustments")
+    print("\nCheck passed: nothing on the server was changed.")
+
+
 async def run_demo(url: str, api_key: str | None = None) -> None:
     print("=" * 70)
     print("DailyAnchor -- simulated Alexa+ session (see module docstring: this is")
@@ -120,12 +144,7 @@ async def run_demo(url: str, api_key: str | None = None) -> None:
     print("=" * 70)
     pause()
 
-    # A deployed server with DAILYANCHOR_API_KEY set needs the key as a bearer token.
-    server = url
-    if api_key:
-        http_client = create_mcp_http_client(headers={"Authorization": f"Bearer {api_key}"})
-        server = streamable_http_client(url, http_client=http_client)
-    async with Client(server) as client:
+    async with connect(url, api_key) as client:
         banner("Setup: what routines does DailyAnchor know about?")
         all_routines = await call(client, "list_routines")
         if not all_routines:
@@ -239,12 +258,14 @@ def main() -> None:
     parser.add_argument("--api-key", default=os.environ.get("DAILYANCHOR_API_KEY"),
                         help="API key for a server with DAILYANCHOR_API_KEY set (default: that env var)")
     parser.add_argument("--no-pause", action="store_true", help="run without pauses, e.g. for a quick smoke test")
+    parser.add_argument("--check", action="store_true",
+                        help="read-only check of a server (calls no tools that change data), then exit")
     args = parser.parse_args()
 
     PAUSE_SECONDS = 0.0 if args.no_pause else args.pause
 
     try:
-        asyncio.run(run_demo(args.url, args.api_key))
+        asyncio.run((run_check if args.check else run_demo)(args.url, args.api_key))
     except ConnectionError as exc:
         print(f"\nCouldn't reach the DailyAnchor server at {args.url}: {exc}")
         print("Start it first with: python -m dailyanchor.server")
