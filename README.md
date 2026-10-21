@@ -6,6 +6,10 @@ memory impairment, ADHD, or cognitive fatigue.
 
 Built for the [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com/) — Alexa+ track.
 
+- **Demo video:** https://youtu.be/dSKW0v6sb-k
+- **Live simulator:** https://3-88-87-89.sslip.io/simulator (caregiver dashboard: https://3-88-87-89.sslip.io/dashboard)
+- **Product feedback:** [FRICTION_LOG.md](FRICTION_LOG.md)
+
 ## What it does
 
 DailyAnchor tracks one or more daily **routines** (e.g. "Morning Routine"),
@@ -243,13 +247,15 @@ from the public IP, which changes if the instance is stopped and started.
 
 ## Status / next steps
 
-- [ ] Confirm actual Alexa+ ↔ MCP server invocation flow via hackathon office hours (docs are minimal as of this writing) and adjust transport/auth if needed.
+- [ ] Connect to the real Alexa+ once a path exists for self-hosted MCP servers (none was available to entrants; the web simulator stands in for it, as the rules allow).
 - [x] Add a caregiver-side "add routine" / "add step" tool so routines can be configured conversationally rather than only via `scripts/seed_data.py`.
 - [x] Adaptive behavior: suggest schedule changes from completion history.
 - [x] Seed some demo history so `suggest_schedule_adjustments` has something to show in the video.
 - [x] Scripted simulation client (`scripts/demo_client.py`) exercising the full demo scenario over real MCP calls.
-- [x] Record demo video (<3 min) walking through the scenario above.
-- [x] Write up product feedback (MCP SDK / Alexa+ docs / Devpost) as required by the submission.
+- [x] Record demo video (<3 min) walking through the scenario above: https://youtu.be/dSKW0v6sb-k
+- [x] Write up product feedback (MCP SDK / Alexa+ docs / AWS) as required by the submission: [FRICTION_LOG.md](FRICTION_LOG.md)
+- [ ] Notify the caregiver when an important step is missed.
+- [ ] Support many households on one server, each with their own routines, key and timezone.
 
 ## License
 
