@@ -10,6 +10,20 @@ Built for the [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonapp
 - **Live simulator:** https://3-88-87-89.sslip.io/simulator (caregiver dashboard: https://3-88-87-89.sslip.io/dashboard)
 - **Product feedback:** [FRICTION_LOG.md](FRICTION_LOG.md)
 
+## Screenshots
+
+**Web simulator, scripted demo.** Alexa+ guides Margaret and answers Priya. The panel on the right lists every real MCP tool call and its JSON result, here the schedule suggestion from Margaret's history.
+
+![Alexa+ simulator after the full scripted demo, with the MCP tool call log](docs/images/simulator-scripted-demo.png)
+
+**Live chat, nothing scripted.** A model stands in for Alexa+, picks the tool itself (`check_step_done`) and answers Priya from the result.
+
+![Live chat: Priya asks whether Mum has taken her morning medication](docs/images/simulator-live-chat.png)
+
+**Caregiver dashboard.** What's done, missed, due now and coming up, including the snoozed step and the physio routine Priya set up by voice.
+
+![Caregiver dashboard showing today's routines](docs/images/caregiver-dashboard.png)
+
 ## What it does
 
 DailyAnchor tracks one or more daily **routines** (e.g. "Morning Routine"),
