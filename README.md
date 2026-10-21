@@ -10,6 +10,24 @@ Built for the [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonapp
 - **Live simulator:** https://3-88-87-89.sslip.io/simulator (caregiver dashboard: https://3-88-87-89.sslip.io/dashboard)
 - **Product feedback:** [FRICTION_LOG.md](FRICTION_LOG.md)
 
+## Quick start
+
+Needs Python 3.10+ and git. No API keys are needed to run it locally.
+
+```bash
+git clone https://github.com/aishsawant0202-tech/dailyanchor.git
+cd dailyanchor
+python -m venv .venv
+source .venv/bin/activate              # Windows: .venv\Scripts\activate
+pip install -e .
+python scripts/seed_data.py --reset --history   # sample routines + a week of history
+python -m dailyanchor.server
+```
+
+Then open http://127.0.0.1:8000/simulator and press **Play full demo**, or open
+http://127.0.0.1:8000/dashboard. More options are under [Setup & running](#setup--running);
+the optional live chat needs an OpenAI key (see [Web simulator](#web-simulator)).
+
 ## Screenshots
 
 **Web simulator, scripted demo.** Alexa+ guides Margaret and answers Priya. The panel on the right lists every real MCP tool call and its JSON result, here the schedule suggestion from Margaret's history.
@@ -145,10 +163,9 @@ OpenAI's Responses API with a remote MCP tool: **OpenAI's servers connect to thi
 would. Locally OpenAI can't reach `127.0.0.1`, so the server runs the model's tool calls
 itself (Chat Completions with function tools). The page says which one is in use.
 
-```bat
-:: Windows cmd
-set OPENAI_API_KEY=sk-...
-python -m dailyanchor.server
+```bash
+export OPENAI_API_KEY=sk-...           # Windows cmd: set OPENAI_API_KEY=sk-...
+python -m dailyanchor.server           # the startup log says "Simulator live chat: on"
 ```
 
 ## Project structure
@@ -161,6 +178,8 @@ src/dailyanchor/
   dashboard.py    # caregiver web page served at /dashboard
   simulator.py    # browser Alexa+ simulation served at /simulator (an MCP client in JS)
   chat.py         # the simulator's live chat: OpenAI model + DailyAnchor tools loop
+  auth.py         # optional bearer-key check on /mcp (DAILYANCHOR_API_KEY)
+  request_log.py  # one log line per MCP request (method, tool, status)
   models.py       # dataclasses for Routine, Step, Completion
   tools/
     routines.py   # list_routines, get_current_step, mark_step_done, check_step_done, get_missed_steps
@@ -180,6 +199,10 @@ tests/
   test_dashboard.py   # dashboard step statuses and HTML rendering
   test_simulator.py   # simulator page config embedding
   test_chat.py        # live chat tool loop, with a fake model
+  test_auth.py, test_request_log.py, test_server_config.py  # API key, request log, server settings
+deploy/ec2-user-data.sh  # one-paste AWS EC2 deployment (Docker + Caddy HTTPS)
+Dockerfile
+docs/images/             # README screenshots
 ```
 
 Business logic in `tools/` takes a plain `sqlite3.Connection` and has no MCP
