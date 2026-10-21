@@ -1,5 +1,9 @@
 """Live chat for the web simulator: an OpenAI model stands in for Alexa+ and answers with
-the DailyAnchor tools.
+the DailyAnchor tools. There are two ways the model reaches the tools:
+
+- chat_via_remote_mcp(): OpenAI's Responses API connects to this server's public /mcp
+  endpoint itself, as Alexa+ would. Needs a URL OpenAI can reach (the deployed server).
+- chat(): for a server OpenAI can't reach (localhost), the tool loop runs here instead.
 
 chat() runs the tool loop: send the conversation and the tool list to the model, run any
 tools it asks for, send the results back, repeat until it answers in words. The model call
@@ -18,7 +22,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 # OPENAI_BASE_URL points at another OpenAI-compatible endpoint (or a local fake for testing).
-OPENAI_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
 DEFAULT_MODEL = "gpt-5-mini"
 MAX_TOOL_ROUNDS = 6
 MAX_HISTORY = 20
@@ -139,17 +143,82 @@ async def chat(
     return {"reply": FALLBACK_REPLY, "tool_calls": calls}
 
 
+def _parse_json(text: Any) -> Any:
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        return text
+
+
+async def chat_via_remote_mcp(
+    history: list[dict],
+    *,
+    server_url: str,
+    mcp_api_key: str,
+    respond: Complete,
+    now: datetime | None = None,
+    skill: str = "",
+) -> dict:
+    """Run one turn with OpenAI calling `server_url` over MCP. Returns the same shape as chat();
+    the tool calls are the mcp_call items OpenAI reports, since it made them, not us."""
+    tool = {
+        "type": "mcp",
+        "server_label": "dailyanchor",
+        "server_description": "Margaret's daily routines, reminders and caregiver summary.",
+        "server_url": server_url,
+        # The care-assistant skill already says when to ask before changing anything.
+        "require_approval": "never",
+    }
+    if mcp_api_key:
+        tool["authorization"] = mcp_api_key  # sent as "Authorization: Bearer <key>"
+    response = await respond(
+        {"instructions": system_prompt(now or datetime.now(), skill), "input": history, "tools": [tool]}
+    )
+
+    calls, texts = [], []
+    for item in response.get("output") or []:
+        kind = item.get("type")
+        if kind == "mcp_call":
+            error = item.get("error")
+            calls.append(
+                {
+                    "name": item.get("name", "?"),
+                    "arguments": _parse_json(item.get("arguments") or "{}"),
+                    "result": error if error else _parse_json(item.get("output")),
+                    "ms": None,
+                    "error": bool(error),
+                }
+            )
+        elif kind == "mcp_list_tools" and item.get("error"):
+            calls.append({"name": "tools/list", "arguments": {}, "result": item["error"], "ms": None, "error": True})
+        elif kind == "message":
+            texts += [part.get("text", "") for part in item.get("content") or [] if part.get("type") == "output_text"]
+    reply = " ".join(text.strip() for text in texts if text.strip())
+    return {"reply": reply or FALLBACK_REPLY, "tool_calls": calls}
+
+
 def openai_completer(api_key: str, model: str = DEFAULT_MODEL) -> Complete:
-    """Chat Completions over plain urllib (in a thread), to avoid a new dependency."""
+    """Chat Completions, for chat()."""
+    return _openai_poster(f"{OPENAI_BASE_URL}/chat/completions", api_key, model)
+
+
+def openai_responder(api_key: str, model: str = DEFAULT_MODEL) -> Complete:
+    """The Responses API, for chat_via_remote_mcp()."""
+    return _openai_poster(f"{OPENAI_BASE_URL}/responses", api_key, model)
+
+
+def _openai_poster(url: str, api_key: str, model: str) -> Complete:
+    """POST to an OpenAI endpoint over plain urllib (in a thread), to avoid a new dependency."""
 
     def post(payload: dict) -> dict:
         request = urllib.request.Request(
-            OPENAI_URL,
+            url,
             data=json.dumps({"model": model, **payload}).encode(),
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         )
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            # Long enough for OpenAI to list this server's tools and make several calls.
+            with urllib.request.urlopen(request, timeout=90) as response:
                 return json.load(response)
         except urllib.error.HTTPError as exc:
             try:

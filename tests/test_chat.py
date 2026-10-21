@@ -143,3 +143,42 @@ def test_prompt_has_the_time_and_the_skill_without_frontmatter():
     assert "Wednesday 21 October 2026, 09:05" in prompt
     assert "Medication safety" in prompt
     assert not skill.startswith("---") and "name: dailyanchor-care-assistant" not in skill
+
+
+@pytest.mark.anyio
+async def test_remote_mcp_turn_hands_the_server_to_openai():
+    response = {"output": [
+        {"type": "mcp_list_tools", "server_label": "dailyanchor", "tools": []},
+        {"type": "mcp_call", "name": "check_step_done", "arguments": '{"step": "pill"}',
+         "output": '{"status": "ambiguous"}', "error": None},
+        {"type": "mcp_call", "name": "snooze_step", "arguments": "{}", "output": None,
+         "error": "step not found"},
+        {"type": "message", "content": [{"type": "output_text", "text": "Which one do you mean?"}]},
+    ]}
+    complete, payloads = _fake_model(response)
+
+    result = await chat.chat_via_remote_mcp(
+        [{"role": "user", "content": "Margaret: did I take my pill?"}],
+        server_url="https://example.sslip.io/mcp", mcp_api_key="k3y", respond=complete)
+
+    [tool] = payloads[0]["tools"]
+    assert tool["type"] == "mcp" and tool["server_url"] == "https://example.sslip.io/mcp"
+    assert tool["authorization"] == "k3y" and tool["require_approval"] == "never"
+    assert payloads[0]["input"][-1]["content"] == "Margaret: did I take my pill?"
+    assert result["reply"] == "Which one do you mean?"
+    assert result["tool_calls"] == [
+        {"name": "check_step_done", "arguments": {"step": "pill"}, "result": {"status": "ambiguous"},
+         "ms": None, "error": False},
+        {"name": "snooze_step", "arguments": {}, "result": "step not found", "ms": None, "error": True},
+    ]
+
+
+@pytest.mark.anyio
+async def test_remote_mcp_without_a_key_sends_no_authorization():
+    complete, payloads = _fake_model({"output": []})
+
+    result = await chat.chat_via_remote_mcp([{"role": "user", "content": "Priya: hi"}],
+                                            server_url="https://x/mcp", mcp_api_key="", respond=complete)
+
+    assert "authorization" not in payloads[0]["tools"][0]
+    assert result["reply"] == chat.FALLBACK_REPLY

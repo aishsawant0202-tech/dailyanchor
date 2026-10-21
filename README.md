@@ -121,6 +121,12 @@ them for real; the calls show in the *MCP tool calls* tab as before. The browser
 `/simulator/chat`, which takes the same API key as `/mcp`, so a public server doesn't spend
 its OpenAI credit on strangers.
 
+On the deployed server (https on a `DAILYANCHOR_ALLOWED_HOSTS` hostname) the chat uses
+OpenAI's Responses API with a remote MCP tool: **OpenAI's servers connect to this server's
+`/mcp` endpoint themselves**, with the API key, list the tools and call them, just as Alexa+
+would. Locally OpenAI can't reach `127.0.0.1`, so the server runs the model's tool calls
+itself (Chat Completions with function tools). The page says which one is in use.
+
 ```bat
 :: Windows cmd
 set OPENAI_API_KEY=sk-...

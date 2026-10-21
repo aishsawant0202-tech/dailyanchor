@@ -175,7 +175,19 @@ async def dashboard_page(request: Request) -> Response:
 async def simulator_page(request: Request) -> Response:
     """Scripted Alexa+ session in the browser; the page itself calls the tools over MCP."""
     chat_model = OPENAI_MODEL if OPENAI_API_KEY else None
-    return HTMLResponse(simulator.render_simulator(MCP_PATH, "/dashboard", chat_model=chat_model))
+    return HTMLResponse(
+        simulator.render_simulator(
+            MCP_PATH, "/dashboard", chat_model=chat_model, chat_mcp_url=_public_mcp_url(request)
+        )
+    )
+
+
+def _public_mcp_url(request: Request) -> str | None:
+    """This server's /mcp URL if OpenAI can reach it: served over https on one of the public
+    DAILYANCHOR_ALLOWED_HOSTS (the deployed server). None locally."""
+    if request.url.scheme == "https" and request.url.hostname in ALLOWED_HOSTS:
+        return str(request.base_url).rstrip("/") + MCP_PATH
+    return None
 
 
 async def _call_tool(name: str, arguments: dict) -> Any:
@@ -213,14 +225,25 @@ async def simulator_chat(request: Request) -> Response:
     history = chat.clean_history(body.get("messages") if isinstance(body, dict) else None)
     if not history or history[-1]["role"] != "user":
         return JSONResponse({"error": "Send a conversation ending with a user message."}, status_code=400)
+    mcp_url = _public_mcp_url(request)
     try:
-        result = await chat.chat(
-            history,
-            tools=chat.openai_tools(await mcp.list_tools()),
-            call_tool=_call_tool,
-            complete=chat.openai_completer(OPENAI_API_KEY, OPENAI_MODEL),
-            skill=chat.load_skill(),
-        )
+        if mcp_url:
+            # OpenAI connects to our /mcp itself, with the same key any MCP client needs.
+            result = await chat.chat_via_remote_mcp(
+                history,
+                server_url=mcp_url,
+                mcp_api_key=API_KEY,
+                respond=chat.openai_responder(OPENAI_API_KEY, OPENAI_MODEL),
+                skill=chat.load_skill(),
+            )
+        else:
+            result = await chat.chat(
+                history,
+                tools=chat.openai_tools(await mcp.list_tools()),
+                call_tool=_call_tool,
+                complete=chat.openai_completer(OPENAI_API_KEY, OPENAI_MODEL),
+                skill=chat.load_skill(),
+            )
     except chat.ChatError as exc:
         return JSONResponse({"error": str(exc)}, status_code=502)
     return JSONResponse(result)

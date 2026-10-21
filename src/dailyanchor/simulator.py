@@ -9,7 +9,8 @@ call made here shows up there a few seconds later.
 
 With OPENAI_API_KEY set on the server the page also has a Live chat mode: what you type (or
 say) goes to /simulator/chat, where an OpenAI model standing in for Alexa+ answers using the
-same tools (see chat.py). Nothing in that mode is scripted.
+same tools (see chat.py). Nothing in that mode is scripted. On the deployed server OpenAI calls
+this server's /mcp endpoint itself; locally, where it can't, the server runs the tools.
 """
 
 import json
@@ -20,17 +21,23 @@ CAREGIVER = "Priya"
 
 
 def render_simulator(
-    mcp_path: str, dashboard_path: str, now: datetime | None = None, chat_model: str | None = None
+    mcp_path: str,
+    dashboard_path: str,
+    now: datetime | None = None,
+    chat_model: str | None = None,
+    chat_mcp_url: str | None = None,
 ) -> str:
     """The simulator page. `now` is the server's local time: the page uses it rather than
     the browser clock to pick a time that is already overdue, since a cloud server's clock
-    (often UTC) can be hours away from the viewer's. `chat_model` turns on Live chat."""
+    (often UTC) can be hours away from the viewer's. `chat_model` turns on Live chat;
+    `chat_mcp_url` is the public /mcp URL OpenAI calls in that mode, if there is one."""
     now = now or datetime.now()
     config = {
         "mcpPath": mcp_path,
         "dashboardPath": dashboard_path,
         "chatPath": "/simulator/chat",
         "chatModel": chat_model,
+        "chatMcpUrl": chat_mcp_url,
         "serverNow": now.isoformat(timespec="seconds"),
         "person": PERSON,
         "caregiver": CAREGIVER,
@@ -159,7 +166,7 @@ iframe { width: 100%; height: 560px; border: 1px solid var(--line); border-radiu
   <div class="notice" id="notice-chat" hidden><strong>Live chat, nothing scripted.</strong> An OpenAI
     model (<code id="chat-model"></code>) stands in for Alexa+ and follows the DailyAnchor
     care-assistant skill. It decides which tools to call, and they run on this server for real,
-    listed under <em>MCP tool calls</em>. What you type is sent to OpenAI.</div>
+    listed under <em>MCP tool calls</em>. <span id="chat-via"></span> What you type is sent to OpenAI.</div>
   <div class="notice" id="notice-scripted"><strong>This is a simulation.</strong> The spoken lines are scripted, because
     this page can't drive the real Alexa+ app. Every fact in them (step names, times, what was
     missed, the suggested change) comes from a real MCP tool call this page makes to
@@ -368,7 +375,8 @@ function logCall(name, args) {
 }
 
 function finishCall(entry, payload, ms, isError = false) {
-  entry.querySelector(".ms").textContent = isError ? "error" : `${Math.round(ms)} ms`;
+  // ms is null for calls OpenAI made to /mcp itself: we only see them afterwards.
+  entry.querySelector(".ms").textContent = isError ? "error" : ms == null ? "by OpenAI" : `${Math.round(ms)} ms`;
   entry.querySelector("pre").textContent =
     typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
   if (isError) { entry.classList.add("error"); entry.open = true; }
@@ -681,6 +689,9 @@ for (const [speaker, text] of CHAT_IDEAS) {
 }
 if (CONFIG.chatModel) {
   $("chat-model").textContent = CONFIG.chatModel;
+  $("chat-via").textContent = CONFIG.chatMcpUrl
+    ? `OpenAI connects to this server's MCP endpoint (${CONFIG.chatMcpUrl}) itself, the way Alexa+ would.`
+    : "This server isn't public, so OpenAI can't reach its MCP endpoint; the server runs the tool calls the model asks for.";
 } else {
   $("chat-off").hidden = false;
   $("chat-form").hidden = $("chat-ideas").hidden = true;
