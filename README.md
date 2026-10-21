@@ -248,8 +248,8 @@ from the public IP, which changes if the instance is stopped and started.
 - [x] Adaptive behavior: suggest schedule changes from completion history.
 - [x] Seed some demo history so `suggest_schedule_adjustments` has something to show in the video.
 - [x] Scripted simulation client (`scripts/demo_client.py`) exercising the full demo scenario over real MCP calls.
-- [ ] Record demo video (<3 min) walking through the scenario above.
-- [ ] Write up product feedback (MCP SDK / Alexa+ docs / Devpost) as required by the submission.
+- [x] Record demo video (<3 min) walking through the scenario above.
+- [x] Write up product feedback (MCP SDK / Alexa+ docs / Devpost) as required by the submission.
 
 ## License
 
