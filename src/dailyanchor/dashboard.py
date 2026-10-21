@@ -132,7 +132,7 @@ def render_dashboard(data: dict, mcp_url: str, tool_count: int) -> str:
 <main>
   <div class="status">
     <span class="dot"></span> MCP server running · endpoint <code>{escape(mcp_url)}</code>
-    · {tool_count} tools
+    · {tool_count} tools · <a href="/simulator">Alexa+ simulator</a>
   </div>
   <h1>Today's routines</h1>
   <p class="sub">{escape(date_label)} · updated {escape(data["generated_at"])},
@@ -166,6 +166,7 @@ main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
 h1 { font-size: 1.75rem; margin: 16px 0 2px; }
 h2 { font-size: 1.15rem; margin: 0; }
 .sub { color: var(--muted); margin: 0 0 20px; font-size: .9rem; }
+a { color: var(--accent); }
 code { font-size: .85em; background: var(--upcoming-bg); padding: 1px 5px; border-radius: 4px; }
 .status { font-size: .85rem; color: var(--muted); display: flex; align-items: center;
   gap: 6px; flex-wrap: wrap; }

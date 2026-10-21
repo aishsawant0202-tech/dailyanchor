@@ -14,7 +14,7 @@ from mcp.server.transport_security import TransportSecuritySettings  # noqa: E40
 from starlette.requests import Request  # noqa: E402
 from starlette.responses import HTMLResponse, RedirectResponse, Response  # noqa: E402
 
-from dailyanchor import dashboard  # noqa: E402
+from dailyanchor import dashboard, simulator  # noqa: E402
 from dailyanchor.auth import ApiKeyMiddleware  # noqa: E402
 from dailyanchor.db import get_db, init_db  # noqa: E402
 from dailyanchor.request_log import RequestLogMiddleware  # noqa: E402
@@ -166,11 +166,18 @@ async def dashboard_page(request: Request) -> Response:
     return HTMLResponse(dashboard.render_dashboard(data, mcp_url, tool_count))
 
 
+@mcp.custom_route("/simulator", methods=["GET"])
+async def simulator_page(request: Request) -> Response:
+    """Scripted Alexa+ session in the browser; the page itself calls the tools over MCP."""
+    return HTMLResponse(simulator.render_simulator(MCP_PATH, "/dashboard"))
+
+
 def main() -> None:
     # Streamable HTTP per MCP spec 2025-11-25 -- required transport for Alexa+ integration.
     # The MCP endpoint is only at MCP_PATH; the root URL returns "Not Found", so print it.
     print(f"DailyAnchor MCP endpoint: http://{HOST}:{PORT}{MCP_PATH}", file=sys.stderr, flush=True)
     print(f"Caregiver dashboard:      http://{HOST}:{PORT}/dashboard", file=sys.stderr, flush=True)
+    print(f"Alexa+ simulator:         http://{HOST}:{PORT}/simulator", file=sys.stderr, flush=True)
     if ALLOWED_HOSTS:
         print(f"Allowed public hosts:     {', '.join(ALLOWED_HOSTS)}", file=sys.stderr, flush=True)
     elif HOST not in ("127.0.0.1", "localhost", "::1"):

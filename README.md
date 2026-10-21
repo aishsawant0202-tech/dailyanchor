@@ -98,6 +98,21 @@ python scripts/demo_client.py            # paced for recording (1.5s between lin
 python scripts/demo_client.py --no-pause # fast run, e.g. to sanity-check before recording
 ```
 
+### Web simulator
+
+The same scenario also runs in the browser at **http://127.0.0.1:8000/simulator** (linked from
+the dashboard). It shows the session on an Echo Show-style screen, with an optional *Read lines
+aloud* toggle, and adds one beat the CLI script doesn't have: Margaret asks "did I take my
+medication?", `check_step_done` finds three matches, and Alexa+ asks which one she means before
+answering. Play the whole demo or one beat at a time.
+
+The page is a real MCP client. Its JavaScript speaks Streamable HTTP to `/mcp`
+(`initialize`, `tools/list`, `tools/call`), and the *MCP tool calls* tab lists every call
+with the JSON it returned. The *Live dashboard* tab shows the dashboard updating as the
+calls land. As with the script, the dialogue is scripted and the facts in it come from the
+server. On a server with `DAILYANCHOR_API_KEY` set, the page asks for the key and keeps it
+in that browser tab only.
+
 ## Project structure
 
 ```
@@ -106,6 +121,7 @@ src/dailyanchor/
   db.py           # SQLite schema + connection helper
   time_utils.py   # shared time/deadline/override logic
   dashboard.py    # caregiver web page served at /dashboard
+  simulator.py    # browser Alexa+ simulation served at /simulator (an MCP client in JS)
   models.py       # dataclasses for Routine, Step, Completion
   tools/
     routines.py   # list_routines, get_current_step, mark_step_done, check_step_done, get_missed_steps
@@ -123,6 +139,7 @@ tests/
   test_adaptation.py  # schedule adjustment suggestions
   test_seed.py        # seed script: idempotent, demo history, reset
   test_dashboard.py   # dashboard step statuses and HTML rendering
+  test_simulator.py   # simulator page config embedding
 ```
 
 Business logic in `tools/` takes a plain `sqlite3.Connection` and has no MCP
@@ -153,7 +170,7 @@ python scripts/seed_data.py --reset --history
 python -m dailyanchor.server
 ```
 
-Then open http://127.0.0.1:8000/dashboard in a browser, and point MCP clients (e.g. the
+Then open http://127.0.0.1:8000/dashboard (or /simulator) in a browser, and point MCP clients (e.g. the
 MCP Inspector, transport "Streamable HTTP") at http://127.0.0.1:8000/mcp.
 
 Run tests:
