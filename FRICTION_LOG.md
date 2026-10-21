@@ -165,6 +165,46 @@ Add an entry as soon as something gets in the way; details are hard to recall la
   to entrants and that simulation is the expected path -- or, if it is available, link the
   steps to register a server URL and the supported auth.
 
+## 8. AWS App Runner is closed to new customers
+
+- **Date:** 2026-10-20
+- **Task attempted:** Deploy the container to a managed HTTPS service, so the server has a
+  public URL for the simulated Alexa+ client without managing a VM.
+- **Steps taken:** Planned App Runner (container image in, HTTPS URL out) and looked at its setup.
+- **Expected:** The simplest AWS path from a Dockerfile to an HTTPS endpoint.
+- **Actual:** App Runner stopped accepting new customers on 2026-04-30, so a new account can't use it.
+- **Severity:** moderate -- the deployment plan had to be redone two days before the deadline.
+- **Workaround:** A single EC2 instance whose User data script installs Docker, builds the
+  image from GitHub and fronts it with Caddy for automatic HTTPS on an `sslip.io` hostname
+  (`deploy/ec2-user-data.sh`).
+- **Suggestion:** Point hackathon entrants at a supported "container to HTTPS URL" path for
+  new accounts in the track resources.
+
+## 9. EC2 User data runs only on first boot
+
+- **Date:** 2026-10-21
+- **Task attempted:** Ship a code fix (a step description) to the running instance.
+- **Steps taken:** Pushed the fix to GitHub, then looked for a way to make the instance pick it up.
+- **Expected:** A reboot, or editing User data, re-runs the build.
+- **Actual:** User data runs on first boot only. Without SSH set up, the only way to update
+  is to launch a new instance, which changes the public IP and so the `sslip.io` URL.
+- **Severity:** minor
+- **Workaround:** Relaunch and update the URL wherever it's shown, or leave the fix for later.
+- **Suggestion:** Document a small update path for the deploy script (e.g. a cron'd `git pull`
+  and rebuild), or use an Elastic IP so the URL survives a relaunch.
+
+## 10. `sslip.io` hostnames are blocked by a corporate web filter
+
+- **Date:** 2026-10-21
+- **Task attempted:** Open the deployed dashboard and simulator from an office network.
+- **Steps taken:** Opened `https://<ip-with-dashes>.sslip.io/dashboard`.
+- **Expected:** The page.
+- **Actual:** A FortiGate block page: the whole `sslip.io` domain is categorised as
+  "Dynamic DNS". Judges or users on similar networks would see the same.
+- **Severity:** minor
+- **Workaround:** Used a phone hotspot. A real domain (or the raw IP for HTTP) avoids it.
+- **Suggestion:** Note this risk wherever wildcard-DNS services are recommended for quick HTTPS.
+
 ---
 
 ## To confirm (not yet hit; turn into entries if they become real problems)
