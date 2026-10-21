@@ -9,6 +9,8 @@ set -euxo pipefail
 API_KEY="CHANGE_ME"
 # The person's timezone: routine times like 08:00 are in this zone.
 TIMEZONE="Europe/Berlin"
+# Optional: turns on the simulator's live chat (an OpenAI model answering with the tools).
+OPENAI_API_KEY=""
 REPO="https://github.com/aishsawant0202-tech/dailyanchor.git"
 
 dnf install -y docker git
@@ -28,6 +30,7 @@ docker run -d --name dailyanchor --network dailyanchor --restart unless-stopped 
   -e DAILYANCHOR_ALLOWED_HOSTS="$HOSTNAME" \
   -e DAILYANCHOR_API_KEY="$API_KEY" \
   -e TZ="$TIMEZONE" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
   dailyanchor
 
 docker run -d --name caddy --network dailyanchor --restart unless-stopped \

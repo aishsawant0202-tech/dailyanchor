@@ -30,3 +30,9 @@ def test_closing_script_tag_in_config_is_escaped():
 
     assert "/mcp</script>" not in html
     assert _config(html)["mcpPath"] == "/mcp</script>"
+
+
+def test_live_chat_is_off_without_a_model():
+    assert _config(simulator.render_simulator("/mcp", "/dashboard"))["chatModel"] is None
+    html = simulator.render_simulator("/mcp", "/dashboard", chat_model="gpt-test")
+    assert _config(html)["chatModel"] == "gpt-test"

@@ -113,6 +113,20 @@ calls land. As with the script, the dialogue is scripted and the facts in it com
 server. On a server with `DAILYANCHOR_API_KEY` set, the page asks for the key and keeps it
 in that browser tab only.
 
+**Live chat.** With `OPENAI_API_KEY` set on the server, the simulator's *Live chat* tab drops
+the script: you type (or, in Chrome and Edge, say) what Margaret or Priya says, and an OpenAI
+model standing in for Alexa+ answers. It gets the 11 DailyAnchor tools and the
+care-assistant skill as its instructions, decides which tools to call, and the server runs
+them for real; the calls show in the *MCP tool calls* tab as before. The browser posts to
+`/simulator/chat`, which takes the same API key as `/mcp`, so a public server doesn't spend
+its OpenAI credit on strangers.
+
+```bat
+:: Windows cmd
+set OPENAI_API_KEY=sk-...
+python -m dailyanchor.server
+```
+
 ## Project structure
 
 ```
@@ -122,6 +136,7 @@ src/dailyanchor/
   time_utils.py   # shared time/deadline/override logic
   dashboard.py    # caregiver web page served at /dashboard
   simulator.py    # browser Alexa+ simulation served at /simulator (an MCP client in JS)
+  chat.py         # the simulator's live chat: OpenAI model + DailyAnchor tools loop
   models.py       # dataclasses for Routine, Step, Completion
   tools/
     routines.py   # list_routines, get_current_step, mark_step_done, check_step_done, get_missed_steps
@@ -140,6 +155,7 @@ tests/
   test_seed.py        # seed script: idempotent, demo history, reset
   test_dashboard.py   # dashboard step statuses and HTML rendering
   test_simulator.py   # simulator page config embedding
+  test_chat.py        # live chat tool loop, with a fake model
 ```
 
 Business logic in `tools/` takes a plain `sqlite3.Connection` and has no MCP
@@ -191,6 +207,9 @@ Defaults suit running locally. Environment variables change them for a cloud hos
 | `DAILYANCHOR_ALLOWED_HOSTS` | *(none)* | Comma-separated public hostnames (e.g. `dailyanchor.example.com`) the MCP endpoint accepts in the `Host` header, in addition to localhost. Without it, requests through a tunnel or proxy to a server bound to 127.0.0.1 get `421 Invalid Host header`, and a server bound to `0.0.0.0` does no Host/Origin checks. |
 | `DAILYANCHOR_DB` | `data/dailyanchor.db` | SQLite file location, e.g. on a mounted volume. |
 | `DAILYANCHOR_API_KEY` | *(none)* | When set, MCP clients must send `Authorization: Bearer <key>`; others get 401. The dashboard stays open. Set it on any public deployment. |
+| `OPENAI_API_KEY` | *(none)* | Turns on the simulator's live chat. |
+| `OPENAI_MODEL` | `gpt-5-mini` | Model for the live chat; any Chat Completions model with tool calling. |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Another OpenAI-compatible endpoint. |
 | `TZ` | system (UTC in the container) | Timezone the routine times are in, e.g. `Europe/Berlin`. `deploy/ec2-user-data.sh` sets it from `TIMEZONE`. |
 
 The `Dockerfile` listens on `0.0.0.0:8000`, seeds the sample routines and demo history on

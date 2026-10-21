@@ -22,6 +22,8 @@ COPY src ./src
 RUN pip install --no-cache-dir .
 
 COPY scripts ./scripts
+# The simulator's live chat gives the model the care-assistant skill as its instructions.
+COPY skills ./skills
 
 EXPOSE 8000
 

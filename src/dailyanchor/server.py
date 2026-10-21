@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sqlite3
@@ -12,10 +13,10 @@ print("DailyAnchor: starting (loading dependencies, this can take a few seconds)
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
 from starlette.requests import Request  # noqa: E402
-from starlette.responses import HTMLResponse, RedirectResponse, Response  # noqa: E402
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response  # noqa: E402
 
-from dailyanchor import dashboard, simulator  # noqa: E402
-from dailyanchor.auth import ApiKeyMiddleware  # noqa: E402
+from dailyanchor import chat, dashboard, simulator  # noqa: E402
+from dailyanchor.auth import ApiKeyMiddleware, bearer_matches  # noqa: E402
 from dailyanchor.db import get_db, init_db  # noqa: E402
 from dailyanchor.request_log import RequestLogMiddleware  # noqa: E402
 from dailyanchor.tools import adaptation, reminders, routines, setup  # noqa: E402
@@ -27,6 +28,10 @@ PORT = int(os.environ.get("PORT", "8000"))
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DAILYANCHOR_ALLOWED_HOSTS", "").split(",") if h.strip()]
 # When set, MCP clients must send "Authorization: Bearer <key>". Set it on any public host.
 API_KEY = os.environ.get("DAILYANCHOR_API_KEY", "")
+# Live chat in the web simulator, with an OpenAI model standing in for Alexa+. Without a key
+# the simulator offers only the scripted demo.
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", chat.DEFAULT_MODEL)
 MCP_PATH = "/mcp"
 LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 LOCAL_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
@@ -169,7 +174,56 @@ async def dashboard_page(request: Request) -> Response:
 @mcp.custom_route("/simulator", methods=["GET"])
 async def simulator_page(request: Request) -> Response:
     """Scripted Alexa+ session in the browser; the page itself calls the tools over MCP."""
-    return HTMLResponse(simulator.render_simulator(MCP_PATH, "/dashboard"))
+    chat_model = OPENAI_MODEL if OPENAI_API_KEY else None
+    return HTMLResponse(simulator.render_simulator(MCP_PATH, "/dashboard", chat_model=chat_model))
+
+
+async def _call_tool(name: str, arguments: dict) -> Any:
+    """Run a tool through the MCP server in-process, unwrapped the way an MCP client sees it."""
+    result = await mcp.call_tool(name, arguments)
+    text = "".join(getattr(block, "text", "") for block in result.content)
+    if result.is_error:
+        raise RuntimeError(text or f"{name} failed")
+    payload = result.structured_content
+    # A bare list (or None) return is wrapped as {"result": ...}; see scripts/demo_client.py.
+    if isinstance(payload, dict) and set(payload) == {"result"}:
+        payload = payload["result"]
+    if payload is None and text:
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            payload = text
+    return payload
+
+
+@mcp.custom_route("/simulator/chat", methods=["POST"])
+async def simulator_chat(request: Request) -> Response:
+    """One turn of live chat: the model answers using the tools. Takes the same API key as
+    /mcp, so a public server doesn't spend its OpenAI credit on strangers."""
+    if API_KEY and not bearer_matches(request.headers.get("authorization", ""), API_KEY):
+        return JSONResponse({"error": "Missing or invalid API key"}, status_code=401)
+    if not OPENAI_API_KEY:
+        return JSONResponse(
+            {"error": "Live chat isn't set up: start the server with OPENAI_API_KEY."}, status_code=503
+        )
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    history = chat.clean_history(body.get("messages") if isinstance(body, dict) else None)
+    if not history or history[-1]["role"] != "user":
+        return JSONResponse({"error": "Send a conversation ending with a user message."}, status_code=400)
+    try:
+        result = await chat.chat(
+            history,
+            tools=chat.openai_tools(await mcp.list_tools()),
+            call_tool=_call_tool,
+            complete=chat.openai_completer(OPENAI_API_KEY, OPENAI_MODEL),
+            skill=chat.load_skill(),
+        )
+    except chat.ChatError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    return JSONResponse(result)
 
 
 def main() -> None:
@@ -183,6 +237,8 @@ def main() -> None:
     elif HOST not in ("127.0.0.1", "localhost", "::1"):
         print("Warning: DAILYANCHOR_ALLOWED_HOSTS is not set, so Host/Origin checks are off.",
               file=sys.stderr, flush=True)
+    if OPENAI_API_KEY:
+        print(f"Simulator live chat:      on ({OPENAI_MODEL})", file=sys.stderr, flush=True)
     if API_KEY:
         print("API key:                  required on the MCP endpoint", file=sys.stderr, flush=True)
     elif HOST not in ("127.0.0.1", "localhost", "::1"):

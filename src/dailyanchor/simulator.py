@@ -1,11 +1,15 @@
 """Browser version of scripts/demo_client.py, served at /simulator.
 
-Like the CLI script this is a SIMULATION: the Alexa+, Margaret and Priya lines are fixed
+The scripted demo, like the CLI script, is a SIMULATION: the Alexa+, Margaret and Priya lines are fixed
 dialogue, since nothing here can drive the real Alexa+ app. What is real is every fact in
 them. The page is its own MCP client: its JavaScript speaks Streamable HTTP to /mcp
 (initialize, tools/list, tools/call) exactly as Alexa+ would, and shows each call and the
 JSON that came back next to the conversation. A live dashboard sits alongside, so a tool
 call made here shows up there a few seconds later.
+
+With OPENAI_API_KEY set on the server the page also has a Live chat mode: what you type (or
+say) goes to /simulator/chat, where an OpenAI model standing in for Alexa+ answers using the
+same tools (see chat.py). Nothing in that mode is scripted.
 """
 
 import json
@@ -15,14 +19,18 @@ PERSON = "Margaret"
 CAREGIVER = "Priya"
 
 
-def render_simulator(mcp_path: str, dashboard_path: str, now: datetime | None = None) -> str:
+def render_simulator(
+    mcp_path: str, dashboard_path: str, now: datetime | None = None, chat_model: str | None = None
+) -> str:
     """The simulator page. `now` is the server's local time: the page uses it rather than
     the browser clock to pick a time that is already overdue, since a cloud server's clock
-    (often UTC) can be hours away from the viewer's."""
+    (often UTC) can be hours away from the viewer's. `chat_model` turns on Live chat."""
     now = now or datetime.now()
     config = {
         "mcpPath": mcp_path,
         "dashboardPath": dashboard_path,
+        "chatPath": "/simulator/chat",
+        "chatModel": chat_model,
         "serverNow": now.isoformat(timespec="seconds"),
         "person": PERSON,
         "caregiver": CAREGIVER,
@@ -127,6 +135,14 @@ label.toggle { font-size: .85rem; display: flex; gap: 6px; align-items: center; 
 .call.error { border-color: var(--err); background: var(--err-bg); }
 .call pre { margin: 0; padding: 8px 10px; background: var(--code-bg); border-top: 1px solid var(--line);
   font-size: .78rem; overflow-x: auto; max-height: 260px; }
+.chat-form { flex-wrap: nowrap; }
+.chat-form input, select { font: inherit; font-size: .9rem; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+.chat-form input { flex: 1; min-width: 0; }
+button.recording { border-color: var(--err); color: var(--err); }
+.chat-off { color: var(--muted); font-size: .88rem; margin: 0; }
+.line.typing { background: #13414b; color: #9fd6e0; align-self: flex-start; }
+[hidden] { display: none !important; }
 iframe { width: 100%; height: 560px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
@@ -140,7 +156,11 @@ iframe { width: 100%; height: 560px; border: 1px solid var(--line); border-radiu
   <h1>DailyAnchor &middot; Alexa+ simulator</h1>
   <p class="sub">Margaret, 78, lives alone with early memory loss. Her daughter Priya checks in by phone.
     <a href="/dashboard">Open the caregiver dashboard</a></p>
-  <div class="notice"><strong>This is a simulation.</strong> The spoken lines are scripted, because
+  <div class="notice" id="notice-chat" hidden><strong>Live chat, nothing scripted.</strong> An OpenAI
+    model (<code id="chat-model"></code>) stands in for Alexa+ and follows the DailyAnchor
+    care-assistant skill. It decides which tools to call, and they run on this server for real,
+    listed under <em>MCP tool calls</em>. What you type is sent to OpenAI.</div>
+  <div class="notice" id="notice-scripted"><strong>This is a simulation.</strong> The spoken lines are scripted, because
     this page can't drive the real Alexa+ app. Every fact in them (step names, times, what was
     missed, the suggested change) comes from a real MCP tool call this page makes to
     <code id="mcp-url"></code>. Each call and its JSON result is listed under <em>MCP tool calls</em>.</div>
@@ -148,7 +168,10 @@ iframe { width: 100%; height: 560px; border: 1px solid var(--line); border-radiu
   <div class="layout">
     <section class="card">
       <header>
-        <h2>Alexa+ session</h2>
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" aria-selected="true" data-mode="scripted">Scripted demo</button>
+          <button class="tab" role="tab" aria-selected="false" data-mode="chat">Live chat</button>
+        </div>
         <span class="conn"><span class="dot" id="conn-dot"></span><span id="conn-text">Not connected</span></span>
       </header>
       <div class="device">
@@ -158,7 +181,7 @@ iframe { width: 100%; height: 560px; border: 1px solid var(--line); border-radiu
         </div>
         <div class="ring" id="ring"></div>
       </div>
-      <div class="controls">
+      <div class="controls" id="scripted-controls">
         <div class="row">
           <button class="primary" id="play-all">Play full demo</button>
           <button id="clear">Clear screen</button>
@@ -167,6 +190,24 @@ iframe { width: 100%; height: 560px; border: 1px solid var(--line); border-radiu
         <div class="row" id="beats">
           <span class="row-label">Or play one moment:</span>
         </div>
+      </div>
+      <div class="controls" id="chat-controls" hidden>
+        <p class="chat-off" id="chat-off" hidden>Live chat isn't set up on this server. Start it with
+          <code>OPENAI_API_KEY</code> set (and optionally <code>OPENAI_MODEL</code>).</p>
+        <div class="row">
+          <label class="toggle">Speaking as
+            <select id="speaker"><option>Margaret</option><option>Priya</option></select></label>
+          <label class="toggle"><input type="checkbox" id="speak-chat"> Read replies aloud</label>
+          <button id="clear-chat">New conversation</button>
+        </div>
+        <form class="row chat-form" id="chat-form">
+          <button type="button" id="mic" hidden>Mic</button>
+          <input id="chat-input" placeholder="Type what Margaret or Priya says" autocomplete="off">
+          <button class="primary" type="submit" id="send">Send</button>
+        </form>
+        <div class="row" id="chat-ideas"><span class="row-label">Try:</span></div>
+      </div>
+      <div class="controls">
         <div class="row key-row" id="key-row">
           <span class="row-label">This server needs its API key (<code>DAILYANCHOR_API_KEY</code>). It stays in this browser tab.</span>
           <input type="password" id="api-key" placeholder="API key" autocomplete="off">
@@ -342,8 +383,11 @@ function addToScreen(el) {
   $("screen").scrollTop = $("screen").scrollHeight;
 }
 
+let mode = "scripted";
+
 function speak(speaker, text) {
-  if (!$("speak").checked || !("speechSynthesis" in window)) return Promise.resolve(false);
+  const toggle = mode === "chat" ? $("speak-chat") : $("speak");
+  if (!toggle.checked || !("speechSynthesis" in window)) return Promise.resolve(false);
   return new Promise(resolve => {
     const utterance = new SpeechSynthesisUtterance(text);
     // Give the three speakers audibly different voices with pitch, as voice lists vary by browser.
@@ -354,17 +398,23 @@ function speak(speaker, text) {
   });
 }
 
-async function say(speaker, text) {
+function addLine(speaker, text) {
   const line = document.createElement("div");
   line.className = "line " + (ROLE[speaker] || "person");
   line.innerHTML = '<span class="who"></span>';
   line.querySelector(".who").textContent = speaker;
   line.append(text);
   addToScreen(line);
+}
+
+// Shows a line and reads it aloud if that's on. `paced` waits a reading-length pause when
+// not speaking, so the scripted demo doesn't flash past.
+async function say(speaker, text, paced = true) {
+  addLine(speaker, text);
   const ring = $("ring");
   if (speaker === "Alexa+") ring.classList.add("listening");
   const spoke = await speak(speaker, text);
-  if (!spoke) await pause(Math.min(2600, 700 + text.length * 22));
+  if (!spoke && paced) await pause(Math.min(2600, 700 + text.length * 22));
   ring.classList.remove("listening");
 }
 
@@ -524,6 +574,18 @@ function setRunning(value) {
   document.querySelectorAll(".controls button").forEach(b => { if (b.id !== "save-key") b.disabled = value; });
 }
 
+function showError(err) {
+  if (err instanceof AuthError) {
+    setConn("err", "API key needed");
+    $("key-row").classList.add("show");
+    $("api-key").focus();
+    aside("The server asked for an API key. Enter it below, then try again.");
+  } else if (err.message !== "no routines") {
+    setConn("err", "Error");
+    aside("Something went wrong: " + err.message);
+  }
+}
+
 async function run(beats) {
   if (running) return;
   setRunning(true);
@@ -533,19 +595,69 @@ async function run(beats) {
       await beat.run();
     }
   } catch (err) {
-    if (err instanceof AuthError) {
-      setConn("err", "API key needed");
-      $("key-row").classList.add("show");
-      $("api-key").focus();
-      aside("The server asked for an API key. Enter it below, then play again.");
-    } else if (err.message !== "no routines") {
-      setConn("err", "Error");
-      aside("Something went wrong: " + err.message);
-    }
+    showError(err);
   } finally {
     setRunning(false);
     $("ring").classList.remove("listening");
   }
+}
+
+// ---- Live chat ---------------------------------------------------------------------------
+// The conversation lives here and is sent whole each turn; the server keeps no chat state.
+const chatHistory = [];
+const CHAT_IDEAS = [
+  [PERSON, "What should I do now?"],
+  [PERSON, "Did I take my pill?"],
+  [PERSON, "I've just taken my morning tablet."],
+  [CAREGIVER, "How is Mum's day going?"],
+  [CAREGIVER, "Should anything in her routine change?"],
+];
+
+async function sendChat(text) {
+  text = text.trim();
+  if (running || !text || !CONFIG.chatModel) return;
+  const speaker = $("speaker").value;
+  setRunning(true);
+  $("chat-input").value = "";
+  addLine(speaker, text);
+  chatHistory.push({ role: "user", content: `${speaker}: ${text}` });
+  const typing = document.createElement("div");
+  typing.className = "line typing";
+  typing.textContent = "...";
+  addToScreen(typing);
+  $("ring").classList.add("listening");
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (apiKey) headers["Authorization"] = "Bearer " + apiKey;
+    const res = await fetch(CONFIG.chatPath, { method: "POST", headers, body: JSON.stringify({ messages: chatHistory }) });
+    if (res.status === 401) throw new AuthError("Missing or invalid API key");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    for (const call of data.tool_calls) {
+      finishCall(logCall(call.name, call.arguments || {}), call.result, call.ms, call.error);
+    }
+    chatHistory.push({ role: "assistant", content: data.reply });
+    typing.remove();
+    await say("Alexa+", data.reply, false);
+  } catch (err) {
+    chatHistory.pop();  // not answered, so don't send it again as if it had been
+    typing.remove();
+    showError(err);
+  } finally {
+    setRunning(false);
+    $("ring").classList.remove("listening");
+    $("chat-input").focus();
+  }
+}
+
+function setMode(next) {
+  mode = next;
+  document.querySelectorAll("[data-mode]").forEach(t => t.setAttribute("aria-selected", String(t.dataset.mode === mode)));
+  $("scripted-controls").hidden = mode !== "scripted";
+  $("chat-controls").hidden = mode !== "chat";
+  $("notice-scripted").hidden = mode !== "scripted";
+  $("notice-chat").hidden = mode !== "chat" || !CONFIG.chatModel;
+  if (mode === "chat" && CONFIG.chatModel) $("chat-input").focus();
 }
 
 for (const beat of BEATS) {
@@ -555,6 +667,38 @@ for (const beat of BEATS) {
   $("beats").append(button);
 }
 $("play-all").addEventListener("click", () => run(BEATS));
+document.querySelectorAll("[data-mode]").forEach(tab => tab.addEventListener("click", () => setMode(tab.dataset.mode)));
+$("chat-form").addEventListener("submit", event => { event.preventDefault(); sendChat($("chat-input").value); });
+$("clear-chat").addEventListener("click", () => {
+  chatHistory.length = 0;
+  $("screen").replaceChildren();
+});
+for (const [speaker, text] of CHAT_IDEAS) {
+  const button = document.createElement("button");
+  button.textContent = `${speaker}: "${text}"`;
+  button.addEventListener("click", () => { $("speaker").value = speaker; sendChat(text); });
+  $("chat-ideas").append(button);
+}
+if (CONFIG.chatModel) {
+  $("chat-model").textContent = CONFIG.chatModel;
+} else {
+  $("chat-off").hidden = false;
+  $("chat-form").hidden = $("chat-ideas").hidden = true;
+}
+// Speech input where the browser has it (Chrome, Edge): one utterance, then send.
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (Recognition && CONFIG.chatModel) {
+  const mic = $("mic");
+  mic.hidden = false;
+  mic.addEventListener("click", () => {
+    const recognition = new Recognition();
+    recognition.lang = "en-GB";
+    recognition.onstart = () => { mic.classList.add("recording"); mic.textContent = "Listening..."; };
+    recognition.onend = () => { mic.classList.remove("recording"); mic.textContent = "Mic"; };
+    recognition.onresult = event => sendChat(event.results[0][0].transcript);
+    recognition.start();
+  });
+}
 $("clear").addEventListener("click", () => {
   $("screen").replaceChildren();
   $("log").replaceChildren();
@@ -569,10 +713,13 @@ $("save-key").addEventListener("click", async () => {
     setConn("err", err instanceof AuthError ? "That key didn't work" : "Couldn't connect");
   }
 });
-if (!("speechSynthesis" in window)) $("speak").closest("label").hidden = true;
+if (!("speechSynthesis" in window)) {
+  $("speak").closest("label").hidden = true;
+  $("speak-chat").closest("label").hidden = true;
+}
 
-document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
-  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", String(t === tab)));
+document.querySelectorAll("[data-panel]").forEach(tab => tab.addEventListener("click", () => {
+  document.querySelectorAll("[data-panel]").forEach(t => t.setAttribute("aria-selected", String(t === tab)));
   document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === tab.dataset.panel));
   if (tab.dataset.panel === "dash-panel" && !$("dashboard").src) $("dashboard").src = CONFIG.dashboardPath;
 }));
